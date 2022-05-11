@@ -1,56 +1,48 @@
-from sekwencjonowanie import get_neighbour_matrix, append_new_oligonucleotide
+from sekwencjonowanie import *
 
 if __name__ == "__main__":
-    matrix = []
-    with open("200-40-2", "r", encoding="UTF-8") as file:
+    names = []
+    with open("krotki.txt", "r", encoding="UTF-8") as file:
         for line in file:
-            matrix.append(line.strip("\n"))
-# print(matrix)
+            names.append(line.strip("\n"))
 
-
-    length = 209
-    cost = 0
-    gain = 0
-    neighbours = get_neighbour_matrix(matrix)
-    o_le = len(matrix[1])
-    # print(o_le)
+    seq_length = 7
+    offsets = get_offsets_matrix(names)
+    oligo_length = len(names[1])
     lowest = 1
-    i = 0
-    j = 0
-    leng = len(neighbours)
-    print(neighbours, matrix)
-    while (not any([len(x) >= length for x in matrix])) and len(matrix) != 1:
-        while i < leng:
-            while j < leng:
-                if neighbours[i][j] == lowest and i != j:
-                    # print(len(matrix[i])-lowest, len(matrix[i]), lowest, matrix[j])
-                    neighbours = append_new_oligonucleotide(matrix, neighbours, i, j, lowest, o_le)
-                    leng = len(neighbours)
-                    if i >= leng:
-                        i = leng - 1
-                    if j >= leng:
-                        j = leng - 1
-                    # neighbours = get_neighbour_matrix(matrix)
-                    # print(neighbours, "\n", matrix)
-                j += 1
-            i += 1
-            j = 0
-        if not any([y == lowest for y in neighbours.flatten()]):
+    row = 0
+    col = 0
+    oligos_left = len(offsets)
+    repeated_offsets_rows = []
+    print(offsets, names)
+    sth_changed = False
+
+    while (not any([len(x) >= seq_length for x in names])) and len(names) != 1:
+        while row < oligos_left:
+            if sum(offsets[row] == lowest) > 1:
+                repeated_offsets_rows.append(row)
+            else:
+                while col < oligos_left:
+                    if offsets[row][col] == lowest and row != col:
+                        offsets = append_new_oligonucleotide(names, offsets, row, col, lowest, oligo_length)
+                        oligos_left = len(offsets)
+                        if row >= oligos_left:
+                            row = oligos_left - 1
+                        if col >= oligos_left:
+                            col = oligos_left - 1
+                        sth_changed = True
+                    # print("debug1")
+
+
+                    col += 1
+            row += 1
+            col = 0
+            # print("out")
+        if not any([y == lowest for y in offsets.flatten()]):
             lowest += 1
             print(f"Lowest {lowest}")
-
-        i = 0
-        print(len(matrix))
-
-
-
-
-    # [x for x in range(10)]
-
-    # print(neighbours)
-
-
-    # print(matrix)
-    # for i in range(len(neighbours)):
-    #     print(matrix[i], neighbours[i])
-
+        if not sth_changed:
+            solve_conflict(repeated_offsets_rows.pop(), offsets, lowest)
+        row = 0
+        sth_changed = False
+        print(len(names))

@@ -1,64 +1,56 @@
 import numpy as np
 
 
-def get_neighbour_matrix(matrix):
-    l = len(matrix)
-    neighbours = np.empty([l, l])
+def get_offsets_matrix(names: list) -> np.ndarray:
+    """
+    :param names:
+    :return:
+    """
+    l = len(names)
+    offsets = np.empty([l, l])
     for i in range(l):
         for j in range(l):
             flag = False
-            for k in range(len(matrix[j])):
-                if matrix[i][k:] == matrix[j][:len(matrix[i]) - k]:
-                    neighbours[i][j] = k
+            for k in range(len(names[j])):
+                if names[i][k:] == names[j][:len(names[i]) - k]:
+                    offsets[i][j] = k
                     flag = True
                     break
             if not flag:
-                neighbours[i][j] = len(matrix[0])
-    return neighbours
+                offsets[i][j] = len(names[0])
+    return offsets
 
 
-def append_new_oligonucleotide(names, neighbours, old_row: int, old_col: int, offset: int, o_le: int):
-    neighbours[:, old_col] = neighbours[:, old_row]
-    neighbours[old_col][old_col] = 0
-    neighbours = np.delete(neighbours, old_row, 0)
-    neighbours = np.delete(neighbours, old_row, 1)
+def append_new_oligonucleotide(names: list, offsets: np.ndarray, old_row: int, old_col: int, offset: int, o_le: int) -> np.ndarray:
+    """
+    :param names:
+    :param offsets:
+    :param old_row:
+    :param old_col:
+    :param offset:
+    :param o_le:
+    :return:
+    """
 
-    # names[old_col] = names[old_row][:offset + len(names[old_row]) - o_le] + names[old_col]
+    offsets[:, old_col] = offsets[:, old_row]
+    offsets[old_col][old_col] = 0
+    offsets = np.delete(offsets, old_row, 0)
+    offsets = np.delete(offsets, old_row, 1)
 
     print(names[old_row] + '\n' + " "*(len(names[old_row]) - o_le + offset) + names[old_col])
-
-    # print(names[old_row][:offset], names[old_col][:])
     names[old_col] = names[old_row][:len(names[old_row]) - o_le + offset] + names[old_col][:]
     print(names[old_col] + '\n')
 
     names.pop(old_row)
-    return neighbours
+
+    return offsets
 
 
-# matrix = []
-# with open("krotki.txt", "r", encoding="UTF-8") as file:
-#     for line in file:
-#         matrix.append(line.strip("\n"))
-#
-# print(matrix)
-#
-# neighbours = get_neighbour_matrix(matrix)
-# for i in range(len(neighbours)):
-#     print(matrix[i], neighbours[i])
-# print(len(neighbours[0]) == len(neighbours[1]))
-#
-#
-# ones = []
-# ones_c = 0
-# sumki = 0
-# # for i in range(len(neighbours)):
-# #     ones.append([])
-# #     for j in range(len(neighbours[i])):
-# #         if neighbours[i][j] == 1:
-# #             ones_c += 1
-# #             ones[i].append(1)
-# #         else:
-# #             ones[i].append(0)
-# #     # print(sum(ones[i]))
-# #     print(np.mean(neighbours[i]))
-# print(ones_c, sumki)
+def solve_conflict(conflict_row: int, offsets: np.ndarray, lowest: int) -> np.ndarray:
+    offsets_cols = np.where(offsets[conflict_row] == lowest)
+    for i in range(len(offsets_cols[0])):
+        print("val ", i, " ", offsets_cols[0][i])
+        val = min(a for a in list(offsets[:, offsets_cols[0][i]]) if a > lowest)
+        print(val)
+
+    return offsets
