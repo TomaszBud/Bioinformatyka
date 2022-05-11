@@ -46,11 +46,27 @@ def append_new_oligonucleotide(names: list, offsets: np.ndarray, old_row: int, o
     return offsets
 
 
-def solve_conflict(conflict_row: int, offsets: np.ndarray, lowest: int) -> np.ndarray:
-    offsets_cols = np.where(offsets[conflict_row] == lowest)
-    for i in range(len(offsets_cols[0])):
-        print("val ", i, " ", offsets_cols[0][i])
-        val = min(a for a in list(offsets[:, offsets_cols[0][i]]) if a > lowest)
-        print(val)
+def solve_conflict(conflict_row: int, offsets: np.ndarray, lowest: int, names: list) -> int:
+    print(conflict_row, offsets[conflict_row], lowest)
+    offsets_cols = np.where(offsets[conflict_row] == lowest)[0]
 
-    return offsets
+    # dłuższy z konfliktowych oligonukl
+    names_lengths = [len(names[a]) for a in offsets_cols]
+    longest_oligo = np.where(names_lengths == max(names_lengths))   #tu jest błąd
+    print(offsets_cols, names_lengths, longest_oligo,  max(names_lengths))
+    if len(longest_oligo) == 1:
+        return offsets_cols[longest_oligo[0]]
+
+    # z lepszym dopasowaniem w kolumnie
+    mins_in_cols = []
+
+    for i in range(len(offsets_cols)):
+        print("val ", i, " ", offsets_cols[i])
+        val = min(a for a in list(offsets[:, offsets_cols[i]]) if a > lowest)
+        mins_in_cols.append(val)
+
+    collageable_oligos = np.where(mins_in_cols == (min(mins_in_cols)))[0]
+    if len(collageable_oligos) > 1:
+        return -1
+    else:
+        return collageable_oligos[0]

@@ -6,9 +6,9 @@ if __name__ == "__main__":
         for line in file:
             names.append(line.strip("\n"))
 
-    seq_length = 7
+    SEQ_LENGTH = 7
     offsets = get_offsets_matrix(names)
-    oligo_length = len(names[1])
+    OLIGO_LENGTH = len(names[1])
     lowest = 1
     row = 0
     col = 0
@@ -17,14 +17,14 @@ if __name__ == "__main__":
     print(offsets, names)
     sth_changed = False
 
-    while (not any([len(x) >= seq_length for x in names])) and len(names) != 1:
+    while (not any([len(x) >= SEQ_LENGTH for x in names])) and len(names) != 1:
         while row < oligos_left:
             if sum(offsets[row] == lowest) > 1:
                 repeated_offsets_rows.append(row)
             else:
                 while col < oligos_left:
                     if offsets[row][col] == lowest and row != col:
-                        offsets = append_new_oligonucleotide(names, offsets, row, col, lowest, oligo_length)
+                        offsets = append_new_oligonucleotide(names, offsets, row, col, lowest, OLIGO_LENGTH)
                         oligos_left = len(offsets)
                         if row >= oligos_left:
                             row = oligos_left - 1
@@ -42,7 +42,13 @@ if __name__ == "__main__":
             lowest += 1
             print(f"Lowest {lowest}")
         if not sth_changed:
-            solve_conflict(repeated_offsets_rows.pop(), offsets, lowest)
+            print(offsets)
+            for i, conflicted_row in enumerate(repeated_offsets_rows):
+                chosen_oligo = solve_conflict(conflicted_row, offsets, lowest, names)
+                if chosen_oligo > -1:
+                    append_new_oligonucleotide(names, offsets, conflicted_row, chosen_oligo, lowest, OLIGO_LENGTH)
+                    del repeated_offsets_rows[i]
+
         row = 0
         sth_changed = False
-        print(len(names))
+        print(f"len(names) {len(names)}")
