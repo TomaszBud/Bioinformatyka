@@ -1,13 +1,22 @@
 import numpy as np
+from typing import *
 
 
 def get_offsets_matrix(names: list) -> np.ndarray:
     """
-    :param names:
-    :return:
+    Calculate offset for each pair of oligonucleotides.
+    Offset is a number of letters (nucleotides) we have to move in the first oligonucleotide to achieve the beginning of the second one.
+    Eg. CGTT, GTTG -> 1, because we have to move by only one letter – C.
+
+    Later it is computed only for the end of the first oligonucleotide (precisely: the same amount of letters we had in each oligonucleotide in the given data).
+    See: append_new_oligonucleotide – offsets for the new oligo
+
+    :param names: list of oligonucleotides
+    :return: matrix of offsets for each pair of them
     """
+
     l = len(names)
-    offsets = np.empty([l, l])
+    offsets = np.empty([l, l], dtype=int)
     for i in range(l):
         for j in range(l):
             flag = False
@@ -21,39 +30,57 @@ def get_offsets_matrix(names: list) -> np.ndarray:
     return offsets
 
 
-def append_new_oligonucleotide(names: list, offsets: np.ndarray, old_row: int, old_col: int, offset: int, o_le: int) -> np.ndarray:
+def append_new_oligonucleotide(names: List[str], offsets: np.ndarray, old_row: int, old_col: int, o_le: int) -> Tuple[np.ndarray, List[str]]:
     """
-    :param names:
-    :param offsets:
-    :param old_row:
-    :param old_col:
-    :param offset:
-    :param o_le:
-    :return:
-    """
+    Collage a pair of oligonucleotides according to their offset.
+    Remove them; Save the result on place of old_col nucleotide.
 
+    :param names: all oligonucleotides
+    :param offsets: offset for each par of oligonucleotides
+    :param old_row: first oligonucleotide to collage
+    :param old_col: first oligonucleotide to collage
+    :param o_le: langth of basic oligonucleotide
+    :return: changed offsets and names matrices
+    """
+    print("\nCollage")
+
+    offset = offsets[old_row][old_col]
+
+    # offsets for the new oligo
     offsets[:, old_col] = offsets[:, old_row]
     offsets[old_col][old_col] = 0
+
     offsets = np.delete(offsets, old_row, 0)
     offsets = np.delete(offsets, old_row, 1)
 
+    # collage names
     print(names[old_row] + '\n' + " "*(len(names[old_row]) - o_le + offset) + names[old_col])
     names[old_col] = names[old_row][:len(names[old_row]) - o_le + offset] + names[old_col][:]
     print(names[old_col] + '\n')
 
     names.pop(old_row)
 
-    return offsets
+    return offsets, names
 
 
-def solve_conflict(conflict_row: int, offsets: np.ndarray, lowest: int, names: list) -> int:
-    print(conflict_row, offsets[conflict_row], lowest)
-    offsets_cols = np.where(offsets[conflict_row] == lowest)[0]
+def solve_conflict(conflict_row: int, offsets: np.ndarray, offset: int, names: list) -> int:
+    """
+    Choose oligonucleotide to collage in the row with > 1 the same offsets
 
-    # dłuższy z konfliktowych oligonukl
-    names_lengths = [len(names[a]) for a in offsets_cols]
-    longest_oligo = np.where(names_lengths == max(names_lengths))   #tu jest błąd
-    print(offsets_cols, names_lengths, longest_oligo,  max(names_lengths))
+    :param conflict_row: index of row with conflicts
+    :param offsets: offset for each par of oligonucleotides
+    :param offset: current offset (lowest)
+    :param names: all oligonucleotides
+    :return: index of oligonucleotide to collage or -1 when cannot solve the conflict
+    """
+    print("\nsolve conflict")
+    print(f"{offsets[conflict_row]}\nrow {conflict_row}, offset {offset}")
+    offsets_cols = np.nonzero(offsets[conflict_row] == offset)[0]
+
+    # dłuższy z konfliktowych oligonukleotydów
+    names_lengths = np.array([len(names[a]) for a in offsets_cols])
+    longest_oligo = np.nonzero(names_lengths == max(names_lengths))[0]  #tu jest błąd
+
     if len(longest_oligo) == 1:
         return offsets_cols[longest_oligo[0]]
 
@@ -61,11 +88,10 @@ def solve_conflict(conflict_row: int, offsets: np.ndarray, lowest: int, names: l
     mins_in_cols = []
 
     for i in range(len(offsets_cols)):
-        print("val ", i, " ", offsets_cols[i])
-        val = min(a for a in list(offsets[:, offsets_cols[i]]) if a > lowest)
+        val = min(a for a in list(offsets[:, offsets_cols[i]]) if a > offset)
         mins_in_cols.append(val)
 
-    collageable_oligos = np.where(mins_in_cols == (min(mins_in_cols)))[0]
+    collageable_oligos = np.nonzero(mins_in_cols == (min(mins_in_cols)))[0]
     if len(collageable_oligos) > 1:
         return -1
     else:
