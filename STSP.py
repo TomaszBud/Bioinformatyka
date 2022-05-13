@@ -1,36 +1,86 @@
-from sekwencjonowanie import get_neighbour_matrix, append_new_oligonucletide
-
-matrix = []
-with open("500+50.txt", "r", encoding="UTF-8") as file:
-    for line in file:
-        matrix.append(line.strip("\n"))
-# print(matrix)
+from sekwencjonowanie import *
+from random import choice
 
 
-length = 200
-cost = 0
-gain = 0
-neighbours = get_neighbour_matrix(matrix)
-o_le = len(matrix[1])
-# print(o_le)
-lowest = 1
-while any(matrix) < length:
-    for i in range(len(neighbours)):
-        for j in range(len(neighbours[i])):
-            if neighbours[i][j] == lowest and i != j:
-                print(len(matrix[i])-lowest, len(matrix[i]), lowest, matrix[j])
-                matrix[i] = matrix[i] + matrix[j][len(matrix[i])-lowest:]
-                matrix.pop(j)
-                for k in range(len(neighbours)):
-                    neighbours[k].pop(j)
-                neighbours.pop(j)
-                append_new_oligonucletide(matrix, matrix[i], neighbours, i, j)
+def update_variables(oligos_left: int, offsets: np.ndarray, row: int, col: int, sth_changed: bool) -> Tuple[int, int, int, bool, set]:
+    oligos_left = len(offsets)
+    if row >= oligos_left:
+        row = oligos_left - 1
+    if col >= oligos_left:
+        col = oligos_left - 1
+    sth_changed = True
 
-    if not any(neighbours) == lowest:
-        lowest += 1
+    return oligos_left, row, col, sth_changed, set()
 
 
-print(matrix)
-for i in range(len(neighbours)):
-    print(matrix[i], neighbours[i])
-    
+if __name__ == "__main__":
+    names = []  # oligonucleotides
+
+    with open("200-40-2", "r", encoding="UTF-8") as file:
+        for line in file:
+            names.append(line.strip("\n"))
+
+    SEQ_LENGTH = 500
+    offsets = get_offsets_matrix(names)
+    OLIGO_LENGTH = len(names[1])
+    lowest = 1  # current offset
+    row = 0
+    col = 0
+    oligos_left = len(offsets)
+    repeated_offsets_rows = set()  # rows with > 1 element with current offset
+    print(names, offsets, sep='\n')
+    sth_changed = False  # was this iteration successful
+
+    # stop when the sequence has desired length or no more oligos left
+    while (not any([len(x) >= SEQ_LENGTH for x in names])) and len(names) != 1:
+        while row < oligos_left:
+            if sum(offsets[row] == lowest) > 1:
+                repeated_offsets_rows.add(row)
+            else:
+                # only one offset in row - process it
+                while col < oligos_left:
+                    if offsets[row][col] == lowest and row != col:
+                        offsets, names = append_new_oligonucleotide(names, offsets, row, col, OLIGO_LENGTH)
+                        print(f"nowe offsety:\n{offsets}")
+                        oligos_left, row, col, sth_changed, repeated_offsets_rows = update_variables(oligos_left,
+                                                                                                     offsets, row, col,
+                                                                                                     sth_changed)
+                        break
+
+                    col += 1
+            row += 1
+            col = 0
+
+        if not any([y == lowest for y in offsets.flatten()]):
+            lowest += 1
+
+            print(f"New lowest: {lowest}")
+
+        if not sth_changed:
+            # solve a conflict
+            chosen_oligo = []
+            for conflicted_row in repeated_offsets_rows:
+                chosen_oligo = solve_conflict(conflicted_row, offsets, lowest, names)
+                print(f"chosen oligo: {chosen_oligo}")
+                if isinstance(chosen_oligo, np.int64):
+                    offsets, names = append_new_oligonucleotide(names, offsets, conflicted_row, chosen_oligo,
+                                                                OLIGO_LENGTH)
+                    # repeated_offsets_rows.remove(conflicted_row)
+                    oligos_left, row, col, sth_changed, repeated_offsets_rows = update_variables(oligos_left, offsets,
+                                                                                                 row, col, sth_changed)
+
+                    break
+
+            if not sth_changed and len(repeated_offsets_rows):
+                chosen_row, chosen_col = solve_conflict_randomly(repeated_offsets_rows, offsets, lowest)
+                offsets, names = append_new_oligonucleotide(names, offsets, chosen_row, chosen_col,
+                                                            OLIGO_LENGTH)
+                # repeated_offsets_rows.remove(conflicted_row)
+                oligos_left, row, col, sth_changed, repeated_offsets_rows = update_variables(oligos_left, offsets, row,
+                                                                                             col, sth_changed)
+
+        row = 0
+        sth_changed = False
+        print(f"Oligos left: {len(names)}")
+
+    print(f"\n---\nStan końcowy: {names}\n{[len(a) for a in names]}\n{max([len(a) for a in names])}\n\nPoszukiwana sekwencja to: {names[np.argmax([len(a) for a in names])]}")
