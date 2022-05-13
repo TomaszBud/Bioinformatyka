@@ -1,7 +1,8 @@
 from sekwencjonowanie import *
+from random import choice
 
 
-def update_variables(oligos_left: int, offsets: np.ndarray, row: int, col: int, sth_changed: bool) -> Tuple[int, int, int, bool]:
+def update_variables(oligos_left: int, offsets: np.ndarray, row: int, col: int, sth_changed: bool) -> Tuple[int, int, int, bool, set]:
     oligos_left = len(offsets)
     if row >= oligos_left:
         row = oligos_left - 1
@@ -9,17 +10,17 @@ def update_variables(oligos_left: int, offsets: np.ndarray, row: int, col: int, 
         col = oligos_left - 1
     sth_changed = True
 
-    return oligos_left, row, col, sth_changed
+    return oligos_left, row, col, sth_changed, set()
 
 
 if __name__ == "__main__":
     names = []  # oligonucleotides
 
-    with open("krotki.txt", "r", encoding="UTF-8") as file:
+    with open("200-40-2", "r", encoding="UTF-8") as file:
         for line in file:
             names.append(line.strip("\n"))
 
-    SEQ_LENGTH = 7
+    SEQ_LENGTH = 500
     offsets = get_offsets_matrix(names)
     OLIGO_LENGTH = len(names[1])
     lowest = 1  # current offset
@@ -41,7 +42,9 @@ if __name__ == "__main__":
                     if offsets[row][col] == lowest and row != col:
                         offsets, names = append_new_oligonucleotide(names, offsets, row, col, OLIGO_LENGTH)
                         print(f"nowe offsety:\n{offsets}")
-                        oligos_left, row, col, sth_changed = update_variables(oligos_left, offsets, row, col, sth_changed)
+                        oligos_left, row, col, sth_changed, repeated_offsets_rows = update_variables(oligos_left,
+                                                                                                     offsets, row, col,
+                                                                                                     sth_changed)
                         break
 
                     col += 1
@@ -50,21 +53,34 @@ if __name__ == "__main__":
 
         if not any([y == lowest for y in offsets.flatten()]):
             lowest += 1
+
             print(f"New lowest: {lowest}")
 
         if not sth_changed:
             # solve a conflict
+            chosen_oligo = []
             for conflicted_row in repeated_offsets_rows:
                 chosen_oligo = solve_conflict(conflicted_row, offsets, lowest, names)
                 print(f"chosen oligo: {chosen_oligo}")
-                if chosen_oligo > -1:
-                    offsets, names = append_new_oligonucleotide(names, offsets, conflicted_row, chosen_oligo, OLIGO_LENGTH)
-                    repeated_offsets_rows.remove(conflicted_row)
-                    oligos_left, row, col, sth_changed = update_variables(oligos_left, offsets, row, col, sth_changed)
+                if isinstance(chosen_oligo, np.int64):
+                    offsets, names = append_new_oligonucleotide(names, offsets, conflicted_row, chosen_oligo,
+                                                                OLIGO_LENGTH)
+                    # repeated_offsets_rows.remove(conflicted_row)
+                    oligos_left, row, col, sth_changed, repeated_offsets_rows = update_variables(oligos_left, offsets,
+                                                                                                 row, col, sth_changed)
+
                     break
+
+            if not sth_changed and len(repeated_offsets_rows):
+                chosen_row, chosen_col = solve_conflict_randomly(repeated_offsets_rows, offsets, lowest)
+                offsets, names = append_new_oligonucleotide(names, offsets, chosen_row, chosen_col,
+                                                            OLIGO_LENGTH)
+                # repeated_offsets_rows.remove(conflicted_row)
+                oligos_left, row, col, sth_changed, repeated_offsets_rows = update_variables(oligos_left, offsets, row,
+                                                                                             col, sth_changed)
 
         row = 0
         sth_changed = False
         print(f"Oligos left: {len(names)}")
 
-    print(f"\n---\nStan końcowy: {names}")
+    print(f"\n---\nStan końcowy: {names}\n{[len(a) for a in names]}\n{max([len(a) for a in names])}\n\nPoszukiwana sekwencja to: {names[np.argmax([len(a) for a in names])]}")

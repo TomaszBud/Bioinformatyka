@@ -1,5 +1,6 @@
 import numpy as np
 from typing import *
+from random import choice
 
 
 def get_offsets_matrix(names: list) -> np.ndarray:
@@ -7,10 +8,8 @@ def get_offsets_matrix(names: list) -> np.ndarray:
     Calculate offset for each pair of oligonucleotides.
     Offset is a number of letters (nucleotides) we have to move in the first oligonucleotide to achieve the beginning of the second one.
     Eg. CGTT, GTTG -> 1, because we have to move by only one letter – C.
-
     Later it is computed only for the end of the first oligonucleotide (precisely: the same amount of letters we had in each oligonucleotide in the given data).
     See: append_new_oligonucleotide – offsets for the new oligo
-
     :param names: list of oligonucleotides
     :return: matrix of offsets for each pair of them
     """
@@ -34,7 +33,6 @@ def append_new_oligonucleotide(names: List[str], offsets: np.ndarray, old_row: i
     """
     Collage a pair of oligonucleotides according to their offset.
     Remove them; Save the result on place of old_col nucleotide.
-
     :param names: all oligonucleotides
     :param offsets: offset for each par of oligonucleotides
     :param old_row: first oligonucleotide to collage
@@ -66,7 +64,6 @@ def append_new_oligonucleotide(names: List[str], offsets: np.ndarray, old_row: i
 def solve_conflict(conflict_row: int, offsets: np.ndarray, offset: int, names: list) -> int:
     """
     Choose oligonucleotide to collage in the row with > 1 the same offsets
-
     :param conflict_row: index of row with conflicts
     :param offsets: offset for each par of oligonucleotides
     :param offset: current offset (lowest)
@@ -79,7 +76,7 @@ def solve_conflict(conflict_row: int, offsets: np.ndarray, offset: int, names: l
 
     # dłuższy z konfliktowych oligonukleotydów
     names_lengths = np.array([len(names[a]) for a in offsets_cols])
-    longest_oligo = np.nonzero(names_lengths == max(names_lengths))[0]  #tu jest błąd
+    longest_oligo = np.nonzero(names_lengths == max(names_lengths))[0]
 
     if len(longest_oligo) == 1:
         return offsets_cols[longest_oligo[0]]
@@ -93,6 +90,13 @@ def solve_conflict(conflict_row: int, offsets: np.ndarray, offset: int, names: l
 
     collageable_oligos = np.nonzero(mins_in_cols == (min(mins_in_cols)))[0]
     if len(collageable_oligos) > 1:
-        return -1
+        return offsets_cols
     else:
         return collageable_oligos[0]
+
+
+def solve_conflict_randomly(repeated_offsets_rows, offsets, offset):
+    chosen_row = choice(list(repeated_offsets_rows))
+    offsets_cols = np.nonzero(offsets[chosen_row] == offset)[0]
+    chosen_col = choice(offsets_cols)
+    return chosen_row, chosen_col
