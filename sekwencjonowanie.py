@@ -90,7 +90,7 @@ def solve_conflict(conflict_row: int, offsets: np.ndarray, offset: int, names: l
 
     collageable_oligos = np.nonzero(mins_in_cols == (min(mins_in_cols)))[0]
     if len(collageable_oligos) > 1:
-        return offsets_cols
+        return -1
     else:
         return collageable_oligos[0]
 
@@ -100,3 +100,52 @@ def solve_conflict_randomly(repeated_offsets_rows, offsets, offset):
     offsets_cols = np.nonzero(offsets[chosen_row] == offset)[0]
     chosen_col = choice(offsets_cols)
     return chosen_row, chosen_col
+
+
+def try_to_collage(names, offsets, offset, length) -> Tuple[np.ndarray, list]:
+    """
+    Get the firsts longest oligos, which sum exceeds sequence lenght and (TODO: try to collage them).
+
+    :param names: all oligonucleotides
+    :param offsets: offset for each par of oligonucleotides
+    :param offset: current offset (lowest)
+    :param length: desired sequence lenght
+    :return: slices of the offsets and names matrices
+    """
+
+    print("\n-----------------try to collage-------------")
+    # sort names by their length
+    names_order = sorted(range(len(names)), key=lambda i: len(names[i]), reverse=True)
+    print(names_order)
+
+    curr_len = 0
+    how_many_oligos = 0
+    flag = False
+
+    # get the firsts longest oligos, which sum exceeds sequence lenght
+    for i, name_index in enumerate(names_order):
+        curr_len += len(names[name_index])
+        if curr_len > length + offset * i:
+            how_many_oligos += i+1
+            flag = True
+            break
+
+    if not flag:
+        print("ALARM!!! TU NIE POWINIEN BYć".upper()) # TODO: nie wejdzie, jeżeli będzie miał za mało oligo. Ma za mało, bo je usuwamy (patrz: slice matrices)
+        how_many_oligos = len(names)
+        return offsets, names
+
+    # slice matrices
+    print("wybrał", how_many_oligos)
+    print("długości", [len(names[x]) for x in names_order[:how_many_oligos]])
+    temp_offsets = offsets.copy()
+
+    temp_offsets = np.delete(temp_offsets, names_order[how_many_oligos:], 0)
+    temp_offsets = np.delete(temp_offsets, names_order[how_many_oligos:], 1)
+    temp_names = list(np.delete(names.copy(), names_order[how_many_oligos:]))
+    print("temp_offsets", temp_offsets)
+    print(temp_names)
+
+    return temp_offsets, temp_names
+
+
