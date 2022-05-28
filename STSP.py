@@ -6,57 +6,66 @@ from random import choice
 
 class Collager:
     def __init__(self):
-        self.names = []
-        self.offsets = None
-        self.SEQ_LENGTH = None
-        self.OLIGO_LENGTH = None
+        self.names = []  # all oligonucleotides
+        self.offsets = None  # offset for each par of oligonucleotides
+        self.SEQ_LENGTH = None  # desired sequence length
+        self.OLIGO_LENGTH = None  # length of basic oligonucleotide
         self.col = 0
         self.row = 0
         self.oligos_left = None
         self.repeated_offsets_cols = set()
         self.repeated_offsets_rows = set()
 
-    def read_instance_from_file(self, file_name):
+    def read_instance_from_file(self, file_name: str):
         with open(file_name, "r", encoding="UTF-8") as file:
             for line in file:
                 self.names.append(line.strip("\n"))
 
-        self.SEQ_LENGTH = 200
+        self.SEQ_LENGTH = int(file_name.split(".")[1].replace("-", ",").replace("+", ",").split(",")[0])
+
         shuffle(self.names)
         self.get_offsets_matrix()
         self.OLIGO_LENGTH = len(self.names[1])
         self.oligos_left = len(self.names)
 
-    def update_variables(self, sth_changed) -> bool:
+    def update_variables(self) -> bool:
+        print("czyszczenie")
         self.oligos_left = len(self.offsets)
         if self.row >= self.oligos_left:
             self.row = self.oligos_left - 1
         if self.col >= self.oligos_left:
             self.col = self.oligos_left - 1
+
         self.repeated_offsets_cols = set()
         self.repeated_offsets_rows = set()
         sth_changed = True
-
         return sth_changed
 
-    def run_collager(self, long_collaging=False, forbidden_names=set()):
+    def run_collager(self, extra_collaging=True, forbidden_names=set()):
         lowest = 1
-        sth_changed = False
+
         # stop when the sequence has desired length or no more oligos left
         while (not any([len(x) >= self.SEQ_LENGTH for x in self.names])) and len(self.names) != 1:
+            sth_changed = False
+            self.row = 0
+
             while self.row < self.oligos_left and self.names[self.row] not in forbidden_names:
+                # look for conflicts
                 if sum(self.offsets[self.row] == lowest) > 1:
                     self.repeated_offsets_rows.add(self.row)
+                    print(f"Nowy konflikt w wierszu {self.row}")
                 else:
-                    # only one offset in row - process it
+                    # only one such offset in row
                     while self.col < self.oligos_left and self.names[self.col] not in forbidden_names:
                         if self.offsets[self.row][self.col] == lowest and self.row != self.col:
                             if sum(self.offsets[:, self.col] == lowest) > 1:
                                 self.repeated_offsets_cols.add(self.col)
+                                print(f"Nowy konflikt w kolumnie {self.col}")
                             else:
-                                self.append_new_oligonucleotide(self.row, self.col)
+                                # only one such offset in col - process it
+                                self.collage_oligonucleotides(self.row, self.col)
                                 print(f"nowe offsety:\n{self.offsets}")
-                                sth_changed = self.update_variables(sth_changed)
+                                sth_changed = True
                                 break
                         self.col += 1
                 self.row += 1
@@ -64,50 +73,60 @@ class Collager:
 
             if not any([y == lowest for y in self.offsets.flatten()]):
                 lowest += 1
-
                 print(f"New lowest: {lowest}")
 
+            # CONFLICTS SOLVING
             if not sth_changed:
-                # solve a conflict
-                for conflicted_row in self.repeated_offsets_rows:
-                    chosen_oligo = self.solve_conflict(conflicted_row, self.offsets, lowest)
-                    print(f"chosen oligo: {chosen_oligo}")
-                    if chosen_oligo > -1:
-                        self.append_new_oligonucleotide(conflicted_row, chosen_oligo)
-                        # repeated_offsets_rows.remove(conflicted_row)
-                        sth_changed = self.update_variables( sth_changed)
-                        break
+                print(f"Solving conflicts: {self.repeated_offsets_rows}, {self.repeated_offsets_cols}")
+                sth_changed = self.solve_conflicts(lowest, 'r')
 
-            if not sth_changed:
-                for conflicted_col in self.repeated_offsets_cols:
-                    chosen_oligo = self.solve_conflict(conflicted_col, self.offsets.T, lowest)
-                    print(f"chosen oligo: {chosen_oligo}")
-                    if chosen_oligo > -1:
-                        self.append_new_oligonucleotide(chosen_oligo, conflicted_col)
-                        # repeated_offsets_rows.remove(conflicted_row)
-                        sth_changed = self.update_variables( sth_changed)
-                        break
+                if not sth_changed:
+                    sth_changed = self.solve_conflicts(lowest, 'c')
 
-                if not sth_changed and len(self.repeated_offsets_rows):
-                    chosen_row, chosen_col = self.solve_conflict_randomly(self.offsets, lowest)
-                    self.append_new_oligonucleotide(chosen_row, chosen_col)
-                    # repeated_offsets_rows.remove(conflicted_row)
-                    sth_changed = self.update_variables( sth_changed)
+                    if not sth_changed and len(self.repeated_offsets_rows):
+                        self.solve_conflict_randomly(lowest, 'r')
+                        sth_changed = True
 
-                if not sth_changed and len(self.repeated_offsets_cols):
-                    chosen_col, chosen_row = self.solve_conflict_randomly(self.offsets.T, lowest)
-                    self.append_new_oligonucleotide(chosen_row, chosen_col)
-                    # repeated_offsets_rows.remove(conflicted_row)
-                    sth_changed = self.update_variables(sth_changed)
-            if lowest > self.OLIGO_LENGTH / 4 and not long_collaging:
-                self.offsets, self.names = self.try_to_collage(self.offsets, lowest, self.SEQ_LENGTH)
-                self.oligos_left = len(self.names)
-                sth_changed = self.update_variables(sth_changed)
+                    if not sth_changed and len(self.repeated_offsets_cols):
+                        self.solve_conflict_randomly(lowest, 'c')
+                        sth_changed = True
 
-            self.row = 0
-            sth_changed = False
+                    if not sth_changed:
+                        print("Nic się nie zmieniło w tej iteracji")
+                        lowest += 1
+                        print(f"New lowest (oszukany): {lowest}")
+
+            # if extra_collaging and lowest > self.OLIGO_LENGTH / 4:   #TODO: dobrać parametr
+            #     print("extra_collaging")
+            #     self.try_to_collage(lowest)
+            #     sth_changed = self.update_variables()
+
             print(f"Oligos left: {len(self.names)}")
         return self.names
+
+    def solve_conflicts(self, offset: int, axis='r'):
+        """
+        try to solve a conflict in from repeated offsets (in rows or columns)
+
+        :param offset: current offset
+        :param axis: 'r'/ 'c' – row or column
+        :return:
+        """
+        if axis == 'r':
+            conflicts = self.repeated_offsets_rows
+            off = self.offsets
+        else:
+            conflicts = self.repeated_offsets_cols
+            off = self.offsets.T
+
+        for conflicted_item in conflicts:
+            chosen_oligo = self.solve_conflict(conflicted_item, off, offset)
+            print(f"chosen oligo: {chosen_oligo}")
+
+            if chosen_oligo > -1:
+                self.collage_oligonucleotides(conflicted_item, chosen_oligo)
+                return True
+        return False
 
     def get_offsets_matrix(self):
         """
@@ -116,7 +135,6 @@ class Collager:
         Eg. CGTT, GTTG -> 1, because we have to move by only one letter – C.
         Later it is computed only for the end of the first oligonucleotide (precisely: the same amount of letters we had in each oligonucleotide in the given data).
         See: append_new_oligonucleotide – offsets for the new oligo
-        :param names: list of oligonucleotides
         :return: matrix of offsets for each pair of them
         """
 
@@ -133,42 +151,12 @@ class Collager:
                 if not flag:
                     self.offsets[i][j] = len(self.names[0])
 
-    def append_new_oligonucleotide(self, old_row: int, old_col: int):
-        """
-        Collage a pair of oligonucleotides according to their offset.
-        Remove them; Save the result on place of old_col nucleotide.
-        :param self.names: all oligonucleotides
-        :param offsets: offset for each par of oligonucleotides
-        :param old_row: first oligonucleotide to collage
-        :param old_col: first oligonucleotide to collage
-        :param o_le: langth of basic oligonucleotide
-        :return: changed offsets and self.names matrices
-        """
-        print("\nCollage")
-
-        offset = self.offsets[old_row][old_col]
-
-        # self.offsets for the new oligo
-        self.offsets[:, old_col] = self.offsets[:, old_row]
-        self.offsets[old_col][old_col] = 0
-
-        self.offsets = np.delete(self.offsets, old_row, 0)
-        self.offsets = np.delete(self.offsets, old_row, 1)
-
-        # collage self.names
-        print(self.names[old_row] + '\n' + " " * (len(self.names[old_row]) - self.OLIGO_LENGTH + offset) + self.names[old_col])
-        self.names[old_col] = self.names[old_row][:len(self.names[old_row]) - self.OLIGO_LENGTH + offset] + self.names[old_col][:]
-        print(self.names[old_col] + '\n')
-
-        self.names.pop(old_row)
-
     def solve_conflict(self, conflict_row: int, offsets: np.ndarray, offset: int) -> int:
         """
         Choose oligonucleotide to collage in the row with > 1 the same offsets
         :param conflict_row: index of row with conflicts
         :param offsets: offset for each par of oligonucleotides
         :param offset: current offset (lowest)
-        :param self.names: all oligonucleotides
         :return: index of oligonucleotide to collage or -1 when cannot solve the conflict
         """
         print("\nsolve conflict")
@@ -195,25 +183,26 @@ class Collager:
         else:
             return collageable_oligos[0]
 
-    def solve_conflict_randomly(self, offsets, offset):
+    def solve_conflict_randomly(self, offset: int, axis='r'):
+        offsets = self.offsets if axis == 'r' else self.offsets.T
         chosen_row = choice(list(self.repeated_offsets_rows))
         offsets_cols = np.nonzero(offsets[chosen_row] == offset)[0]
         chosen_col = choice(offsets_cols)
-        return chosen_row, chosen_col
 
-    def try_to_collage(self, offsets, offset, length) -> Tuple[np.ndarray, list]:
+        self.collage_oligonucleotides(chosen_row, chosen_col)
+
+        return True
+
+    def try_to_collage(self, offset) -> Tuple[np.ndarray, list]:
         """
-        Get the firsts longest oligos, which sum exceeds sequence lenght and (TODO: try to collage them).
+        Get the firsts longest oligos, which sum exceeds sequence lenght and try to collage them.
 
-        :param self.names: all oligonucleotides
-        :param offsets: offset for each par of oligonucleotides
         :param offset: current offset (lowest)
-        :param length: desired sequence lenght
-        :return: slices of the offsets and self.names matrices
+        :return:
         """
 
         print("\n-----------------try to collage-------------")
-        # sort self.names by their length
+        # sort names by their length
         names_order = sorted(range(len(self.names)), key=lambda i: len(self.names[i]), reverse=True)
         print(names_order)
 
@@ -224,33 +213,68 @@ class Collager:
         # get the firsts longest oligos, which sum exceeds sequence lenght
         for i, name_index in enumerate(names_order):
             curr_len += len(self.names[name_index])
-            if curr_len > length + offset * i:
+            if curr_len > self.SEQ_LENGTH + offset * i:
                 how_many_oligos += i + 1
                 flag = True
                 break
 
-
         if not flag:
-            print(
-                "ALARM!!! TU NIE POWINIEN BYć".upper())  # TODO: nie wejdzie, jeżeli będzie miał za mało oligo. Ma za mało, bo je usuwamy (patrz: slice matrices)
-            how_many_oligos = len(self.names)
-            return offsets, self.names
+            print("ALARM!!! TU NIE POWINIEN BYĆ")  # nie wejdzie, jeżeli będzie miał za mało oligo, żeby stworzyć pełną sekwencję
+            # how_many_oligos = len(self.names)
+            return None
 
-        # slice matrices
-        print("wybrał", how_many_oligos)
-        print("długości", [len(self.names[x]) for x in names_order[:how_many_oligos]])
+        print(f"wybrał {how_many_oligos} oligo")
+        print("Ich długości: ", [len(self.names[x]) for x in names_order[:how_many_oligos]])
 
+        # tworzy listę nazw oligonukleotydów, których nie może użyć do składania sekwencji
         forbidden = set(np.delete(self.names.copy(), names_order[:how_many_oligos]))
-        print("forbidden", forbidden)
+        print("Forbidden", forbidden)
 
-        self.run_collager(True, forbidden)
+        self.run_collager(False, forbidden)
+
+        #BUG: czasem są lepsze offsety wśród zakazanych oligo i nie zwiększa lowest, ale też nic nie może zrobić, bo wszystkie zbiory są puste
+
+
+    def collage_oligonucleotides(self, old_row: int, old_col: int):
+        """
+        Collage a pair of oligonucleotides according to their offset.
+        Remove them; Save the result on place of old_col nucleotide.
+        :param old_row: first oligonucleotide to collage
+        :param old_col: first oligonucleotide to collage
+        :return: changed offsets and self.names matrices
+        """
+        print("\nCollage")
+
+        offset = self.offsets[old_row][old_col]
+
+        # self.offsets for the new oligo
+        self.offsets[:, old_col] = self.offsets[:, old_row]
+        self.offsets[old_col][old_col] = 0
+
+        self.offsets = np.delete(self.offsets, old_row, 0)
+        self.offsets = np.delete(self.offsets, old_row, 1)
+
+        # collage self.names
+        print(self.names[old_row] + '\n' + " " * (len(self.names[old_row]) - self.OLIGO_LENGTH + offset) + self.names[
+            old_col])
+        self.names[old_col] = self.names[old_row][:len(self.names[old_row]) - self.OLIGO_LENGTH + offset] + self.names[
+                                                                                                                old_col][
+                                                                                                            :]
+        print(self.names[old_col] + '\n')
+
+        self.names.pop(old_row)
+
+        self.update_variables()
+
+        return True
 
 
 if __name__ == "__main__":
-    file_name = '200-40-2'
+    file_name = '9.200-40'
     collager = Collager()
     collager.read_instance_from_file(file_name)
     collager.run_collager()
 
     print(collager.names, collager.offsets, sep='\n')
-    print(f"\n---\nStan końcowy: {collager.names}\n{[len(a) for a in collager.names]}\n{max([len(a) for a in collager.names])}\n\nPoszukiwana sekwencja to: {collager.names[np.argmax([len(a) for a in collager.names])]}")
+    print(
+        f"\n---\nStan końcowy: {collager.names}\n{[len(a) for a in collager.names]}\n{max([len(a) for a in collager.names])}\n\nPoszukiwana sekwencja to: {collager.names[np.argmax([len(a) for a in collager.names])]}")
