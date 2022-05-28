@@ -45,20 +45,33 @@ class Collager:
         lowest = 1
 
         # stop when the sequence has desired length or no more oligos left
-        while (not any([len(x) >= self.SEQ_LENGTH for x in self.names])) and len(self.names) != 1:
+        while (not any([len(x) >= self.SEQ_LENGTH for x in self.names])) and len(self.names) != 1 and len(self.names) > len(forbidden_names):
+            print(self.names, forbidden_names)
             sth_changed = False
             self.row = 0
 
-            while self.row < self.oligos_left and self.names[self.row] not in forbidden_names:
-                # look for conflicts
-                if sum(self.offsets[self.row] == lowest) > 1:
-                    self.repeated_offsets_rows.add(self.row)
-                    print(f"Nowy konflikt w wierszu {self.row}")
-                else:
-                    # only one such offset in row
-                    while self.col < self.oligos_left and self.names[self.col] not in forbidden_names:
-                        if self.offsets[self.row][self.col] == lowest and self.row != self.col:
-                            if sum(self.offsets[:, self.col] == lowest) > 1:
+            print(f"Row is forbidden: {self.names[self.row] in forbidden_names}. Row: {self.names[self.row]}.\nForbidden {forbidden_names}")
+
+            # O(n)
+            while self.row < self.oligos_left:
+                if self.names[self.row] not in forbidden_names:
+                    # is lowest in this row?
+                    lowest_in_row = (self.offsets[self.row] == lowest)
+                    nr_of_lowest_in_row = sum(lowest_in_row)
+
+                    if nr_of_lowest_in_row > 1:
+                        self.repeated_offsets_rows.add(self.row)
+                        print(f"Nowy konflikt w wierszu {self.row}")
+
+                    elif nr_of_lowest_in_row == 1:
+                        # only one such offset in row - check column
+                        self.col = np.argwhere(lowest_in_row)[0][0]
+
+                        if self.names[self.col] not in forbidden_names and self.row != self.col:
+                            lowest_in_col = self.offsets[:, self.col] == lowest
+                            nr_of_lowest_in_col = sum(lowest_in_col)
+
+                            if nr_of_lowest_in_col > 1:
                                 self.repeated_offsets_cols.add(self.col)
                                 print(f"Nowy konflikt w kolumnie {self.col}")
                             else:
@@ -67,9 +80,16 @@ class Collager:
                                 print(f"nowe offsety:\n{self.offsets}")
                                 sth_changed = True
                                 break
-                        self.col += 1
+
                 self.row += 1
                 self.col = 0
+
+                """
+                #NOTE: problem z tym rozwiązaniem:
+                przy [[1,1],
+                      [1,1]]
+                wykryje tylko konflikty w wierszach. Czy to nam przeszkadza?
+                """
 
             if not any([y == lowest for y in self.offsets.flatten()]):
                 lowest += 1
@@ -184,6 +204,12 @@ class Collager:
             return collageable_oligos[0]
 
     def solve_conflict_randomly(self, offset: int, axis='r'):
+        """
+        Choose random conflict and solve it.
+        :param offset: current offset (lowest)
+        :param axis: 'r'/ 'c' – row or column
+        :return:
+        """
         offsets = self.offsets if axis == 'r' else self.offsets.T
         chosen_row = choice(list(self.repeated_offsets_rows))
         offsets_cols = np.nonzero(offsets[chosen_row] == offset)[0]
