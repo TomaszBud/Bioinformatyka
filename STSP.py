@@ -4,7 +4,6 @@ import numpy as np
 from typing import *
 from random import choice
 
-
 class Collager:
     def __init__(self):
         self.names = []  # all oligonucleotides
@@ -17,8 +16,8 @@ class Collager:
         self.repeated_offsets_cols = set()
         self.repeated_offsets_rows = set()
 
-    def read_instance_from_file(self, file_name: str):
-        with open(file_name, "r", encoding="UTF-8") as file:
+    def read_instance_from_file(self, path, file_name: str):
+        with open(f"{path}/{file_name}", "r", encoding="UTF-8") as file:
             for line in file:
                 self.names.append(line.strip("\n"))
 
@@ -84,8 +83,8 @@ class Collager:
 
                 """
                 #NOTE: problem z tym rozwiązaniem:
-                przy [[1,1],
-                      [1,1]]
+                przy [[1,2,1],
+                      [1,0,1]]
                 wykryje tylko konflikty w wierszach. Czy to nam przeszkadza?
                 """
 
@@ -105,11 +104,6 @@ class Collager:
 
             logging.debug(f"Oligos left: {len(self.names)}\n")
 
-
-            # #TODO: delete! Only for debugging!
-            # if lowest > 10:
-            #     logging.error("COŚ JEST NIE TAK")
-            #     break
         return self.names
 
     def solve_conflicts(self, offset: int):
@@ -215,8 +209,14 @@ class Collager:
         :param axis: 'r'/ 'c' – row or column
         :return:
         """
-        offsets = self.offsets if axis == 'r' else self.offsets.T
-        chosen_row = choice(list(self.repeated_offsets_rows))
+        if axis == 'r':
+            offsets = self.offsets
+            repeated = self.repeated_offsets_rows
+        else:
+            offsets = self.offsets.T
+            repeated = self.repeated_offsets_cols
+
+        chosen_row = choice(list(repeated))
         offsets_cols = np.nonzero(offsets[chosen_row] == offset)[0]
         chosen_col = choice(offsets_cols)
 
@@ -255,11 +255,11 @@ class Collager:
             return None
 
         logging.debug(f"wybrał {how_many_oligos} oligo")
-        logging.debug("Ich długości: ", [len(self.names[x]) for x in names_order[:how_many_oligos]])
+        logging.debug(f"Ich długości: {[len(self.names[x]) for x in names_order[:how_many_oligos]]}")
 
         # tworzy listę nazw oligonukleotydów, których nie może użyć do składania sekwencji
         forbidden = set(np.delete(self.names.copy(), names_order[:how_many_oligos]))
-        logging.debug("Forbidden", forbidden)
+        logging.debug(f"Forbidden {forbidden}")
 
         self.run_collager(False, forbidden)
 
@@ -304,7 +304,7 @@ if __name__ == "__main__":
     # logging.basicConfig(format='%(message)s', level=logging.DEBUG) #DEBUG, INFO, WARNING, ERROR, CRITICAL
     logging.basicConfig(format='%(message)s', level=logging.ERROR)
 
-    file_name = '9.200-40'
+    file_name = 'data/9.200-40'
     collager = Collager()
     collager.read_instance_from_file(file_name)
     collager.run_collager()
