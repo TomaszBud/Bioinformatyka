@@ -24,12 +24,14 @@ class Collager:
             for i, line in enumerate(file):
                 oligo = line.strip("\n")
                 self.BASE_NAMES.append(oligo)
-                self.names_components[oligo] = [i]
         logging.info(self.names_components)
 
-        self.names = self.BASE_NAMES.copy()
 
-        shuffle(self.names)
+        shuffle(self.BASE_NAMES)
+        self.names = self.BASE_NAMES.copy()
+        for i, name in enumerate(self.BASE_NAMES):
+            self.names_components[name] = [i]
+
         self.get_offsets_matrix()
         self.OLIGO_LENGTH = len(self.names[1])
         self.oligos_left = len(self.names)
@@ -284,9 +286,14 @@ class Collager:
         :param old_col: second oligonucleotide to collage
         :return: changed offsets and self.names matrices
         """
+
         logging.debug("\nCollage")
+
+        # left_base_name = self.BASE_NAMES.index(self.names[old_row][-self.OLIGO_LENGTH:])
+
         left_name = self.names[old_row]
         right_name = self.names[old_col]
+        print(self.names[old_row], self.names[old_col], self.BASE_NAMES[self.names_components[left_name][0]], self.BASE_NAMES[self.names_components[right_name][0]])
 
         offset = self.offsets[old_row][old_col]
 
@@ -305,13 +312,15 @@ class Collager:
         logging.debug(right_name + '\n')
         self.names.pop(old_row)
 
+        print("old", old_row, old_col)
 
         # collage names components
         self.names_components[new_oligo_name] = self.names_components[left_name] + self.names_components[right_name]
 
+        print(self.names_components[new_oligo_name])
+
         self.names_components.pop(left_name)
         self.names_components.pop(right_name)
-
 
         self.update_variables()
         if old_row < old_col:
@@ -322,16 +331,41 @@ class Collager:
         return True
 
 
-    def dense(self):
-        pass
+    def collage_base_oligos(self, left: int, right: int):
+        offset = self.BASE_OFFSETS[left][right]
+        print(f"{offset}, {self.BASE_OFFSETS[right][left]} ")
+        left_name = self.BASE_NAMES[left]
+        right_name = self.BASE_NAMES[right]
 
+        logging.info(left_name + '\n' + " " * (len(left_name) - self.OLIGO_LENGTH + offset) + right_name)
+
+        new_oligo_name = left_name[:len(left_name) - self.OLIGO_LENGTH + offset] + right_name[:]
+
+        print(new_oligo_name)
+        return new_oligo_name
+
+    def calc_density(self, solution: list) -> float:
+        logging.info("calc_density")
+        # collage sequence by indexes
+
+        used_oligos = len(solution)
+        collaged_sequence = self.BASE_NAMES[solution[0]]
+
+        for i in range(used_oligos - 1):
+            new_fragment = self.collage_base_oligos(solution[i], solution[i+1])
+            collaged_sequence = collaged_sequence[:-self.OLIGO_LENGTH] + new_fragment
+
+        logging.info(collaged_sequence + '\n' + " " * (len(collaged_sequence) - self.OLIGO_LENGTH) + new_fragment)
+
+        print(len(collaged_sequence), collaged_sequence)
+        return used_oligos/len(collaged_sequence)
 
     def taboo(self, start_solution):
         pass
 
 if __name__ == "__main__":
     # logging.basicConfig(format='%(message)s', level=logging.DEBUG) #DEBUG, INFO, WARNING, ERROR, CRITICAL
-    logging.basicConfig(format='%(message)s', level=logging.ERROR)
+    logging.basicConfig(format='%(message)s', level=logging.INFO)
 
     path = "./data"
     file_name = '9.200-40'
@@ -339,6 +373,10 @@ if __name__ == "__main__":
     collager.read_instance_from_file(path, file_name)
     collager.run_collager()
 
+    res = collager.names[np.argmax([len(a) for a in collager.names])]
+
+    print(collager.calc_density(collager.names_components[res]))
+
     logging.debug(f"{collager.names}\n{collager.offsets}")
     print(
-        f"\n---\nStan końcowy: {collager.names}\n{[len(a) for a in collager.names]}\n{max([len(a) for a in collager.names])}\n\nPoszukiwana sekwencja to: {collager.names[np.argmax([len(a) for a in collager.names])]}")
+        f"\n---\nStan końcowy: {collager.names}\n{[len(a) for a in collager.names]}\n{max([len(a) for a in collager.names])}\n\nPoszukiwana sekwencja to: {res}")
