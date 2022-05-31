@@ -21,12 +21,13 @@ class Collager:
             for line in file:
                 self.names.append(line.strip("\n"))
 
-        self.SEQ_LENGTH = int(file_name.split(".")[1].replace("-", ",").replace("+", ",").split(",")[0])
 
         shuffle(self.names)
         self.get_offsets_matrix()
         self.OLIGO_LENGTH = len(self.names[1])
         self.oligos_left = len(self.names)
+
+        self.SEQ_LENGTH = int(file_name.split(".")[1].replace("-", ",").replace("+", ",").split(",")[0]) + self.OLIGO_LENGTH - 1
 
     def update_variables(self) -> bool:
         logging.debug("czyszczenie")
@@ -41,11 +42,11 @@ class Collager:
         sth_changed = True
         return sth_changed
 
-    def run_collager(self, extra_collaging=True, forbidden_names=set()):
+    def run_collager(self, f_param=3, extra_collaging=True, forbidden_names=set()):
         lowest = 1
 
         # stop when the sequence has desired length or no more oligos left
-        while (not any([len(x) >= self.SEQ_LENGTH for x in self.names])) and len(self.names) != 1 and len(self.names) > len(forbidden_names)+1:
+        while (not any([len(x) >= self.SEQ_LENGTH for x in self.names])) and len(self.names) != 1 and len(self.names) > len(forbidden_names) + 1:
             sth_changed = False
             self.row = 0
 
@@ -93,7 +94,7 @@ class Collager:
                 sth_changed = self.solve_conflicts(lowest)
                 if not sth_changed: logging.debug("Nic się nie zmieniło w tej iteracji")
 
-            if extra_collaging and lowest > self.OLIGO_LENGTH / 4:   #TODO: dobrać parametr
+            if extra_collaging and lowest > self.OLIGO_LENGTH / f_param:   #TODO: dobrać parametr
                 logging.debug("extra_collaging")
                 self.try_to_collage(lowest)
                 self.update_variables()
@@ -261,10 +262,9 @@ class Collager:
         forbidden = set(np.delete(self.names.copy(), names_order[:how_many_oligos]))
         logging.debug(f"Forbidden {forbidden}")
 
-        self.run_collager(False, forbidden)
+        self.run_collager(extra_collaging=False, forbidden_names=forbidden)
 
         #BUG: czasem są lepsze offsety wśród zakazanych oligo i nie zwiększa offset, ale też nic nie może zrobić, bo wszystkie zbiory są puste
-
 
     def collage_oligonucleotides(self, old_row: int, old_col: int):
         """
@@ -296,6 +296,10 @@ class Collager:
         self.names.pop(old_row)
 
         self.update_variables()
+        if old_row < old_col:
+            self.row = old_col - 1
+        else:
+            self.row = old_col
 
         return True
 
