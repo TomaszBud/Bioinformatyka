@@ -7,7 +7,10 @@ from random import choice
 class Collager:
     def __init__(self):
         self.names = []  # all oligonucleotides
+        self.names_components = dict()
+        self.BASE_NAMES = []
         self.offsets = None  # offset for each par of oligonucleotides
+        self.BASE_OFFSETS = []
         self.SEQ_LENGTH = None  # desired sequence length
         self.OLIGO_LENGTH = None  # length of basic oligonucleotide
         self.col = 0
@@ -18,9 +21,13 @@ class Collager:
 
     def read_instance_from_file(self, path, file_name: str):
         with open(f"{path}/{file_name}", "r", encoding="UTF-8") as file:
-            for line in file:
-                self.names.append(line.strip("\n"))
+            for i, line in enumerate(file):
+                oligo = line.strip("\n")
+                self.BASE_NAMES.append(oligo)
+                self.names_components[oligo] = [i]
+        logging.info(self.names_components)
 
+        self.names = self.BASE_NAMES.copy()
 
         shuffle(self.names)
         self.get_offsets_matrix()
@@ -28,6 +35,7 @@ class Collager:
         self.oligos_left = len(self.names)
 
         self.SEQ_LENGTH = int(file_name.split(".")[1].replace("-", ",").replace("+", ",").split(",")[0]) + self.OLIGO_LENGTH - 1
+
 
     def update_variables(self) -> bool:
         logging.debug("czyszczenie")
@@ -159,17 +167,19 @@ class Collager:
         """
 
         l = len(self.names)
-        self.offsets = np.empty([l, l], dtype=int)
+        self.BASE_OFFSETS = np.empty([l, l], dtype=int)
         for i in range(l):
             for j in range(l):
                 flag = False
                 for k in range(len(self.names[j])):
                     if self.names[i][k:] == self.names[j][:len(self.names[i]) - k]:
-                        self.offsets[i][j] = k
+                        self.BASE_OFFSETS[i][j] = k
                         flag = True
                         break
                 if not flag:
-                    self.offsets[i][j] = len(self.names[0])
+                    self.BASE_OFFSETS[i][j] = len(self.names[0])
+
+        self.offsets = self.BASE_OFFSETS.copy()
 
     def solve_conflict(self, conflict_row: int, offsets: np.ndarray, offset: int) -> int:
         """
@@ -271,10 +281,12 @@ class Collager:
         Collage a pair of oligonucleotides according to their offset.
         Remove them; Save the result on place of old_col nucleotide.
         :param old_row: first oligonucleotide to collage
-        :param old_col: first oligonucleotide to collage
+        :param old_col: second oligonucleotide to collage
         :return: changed offsets and self.names matrices
         """
         logging.debug("\nCollage")
+        left_name = self.names[old_row]
+        right_name = self.names[old_col]
 
         offset = self.offsets[old_row][old_col]
 
@@ -286,14 +298,20 @@ class Collager:
         self.offsets = np.delete(self.offsets, old_row, 1)
 
         # collage self.names
-        logging.debug(self.names[old_row] + '\n' + " " * (len(self.names[old_row]) - self.OLIGO_LENGTH + offset) + self.names[
-            old_col])
-        self.names[old_col] = self.names[old_row][:len(self.names[old_row]) - self.OLIGO_LENGTH + offset] + self.names[
-                                                                                                                old_col][
-                                                                                                            :]
-        logging.debug(self.names[old_col] + '\n')
+        logging.debug(left_name + '\n' + " " * (len(left_name) - self.OLIGO_LENGTH + offset) + right_name)
 
+        new_oligo_name = left_name[:len(left_name) - self.OLIGO_LENGTH + offset] + right_name[:]
+        self.names[old_col] = new_oligo_name
+        logging.debug(right_name + '\n')
         self.names.pop(old_row)
+
+
+        # collage names components
+        self.names_components[new_oligo_name] = self.names_components[left_name] + self.names_components[right_name]
+
+        self.names_components.pop(left_name)
+        self.names_components.pop(right_name)
+
 
         self.update_variables()
         if old_row < old_col:
@@ -304,13 +322,21 @@ class Collager:
         return True
 
 
+    def dense(self):
+        pass
+
+
+    def taboo(self, start_solution):
+        pass
+
 if __name__ == "__main__":
     # logging.basicConfig(format='%(message)s', level=logging.DEBUG) #DEBUG, INFO, WARNING, ERROR, CRITICAL
     logging.basicConfig(format='%(message)s', level=logging.ERROR)
 
-    file_name = 'data/9.200-40'
+    path = "./data"
+    file_name = '9.200-40'
     collager = Collager()
-    collager.read_instance_from_file(file_name)
+    collager.read_instance_from_file(path, file_name)
     collager.run_collager()
 
     logging.debug(f"{collager.names}\n{collager.offsets}")
