@@ -319,8 +319,10 @@ class Collager:
 
         print(self.names_components[new_oligo_name])
 
-        self.names_components.pop(left_name)
-        self.names_components.pop(right_name)
+        if len(left_name) > self.OLIGO_LENGTH:
+            self.names_components.pop(left_name)
+        if len(right_name) > self.OLIGO_LENGTH:
+            self.names_components.pop(right_name)
 
         self.update_variables()
         if old_row < old_col:
@@ -360,8 +362,83 @@ class Collager:
         print(len(collaged_sequence), collaged_sequence)
         return used_oligos/len(collaged_sequence)
 
-    def taboo(self, start_solution):
-        pass
+    def shrink(self, solution: list, taboo: list) -> tuple:
+        sth_changed = True
+        while sth_changed:
+            sth_changed = False
+            current_density = self.calc_density(solution)
+            best_density = current_density
+            best_density_index = -1
+
+            for i in range(len(solution)):
+                density = self.calc_density(solution[:i] + solution[i + 1:])
+                if density >= best_density:
+                    best_density = density
+                    best_density_index = i
+
+            if best_density_index != -1:
+                taboo_oligo= solution[best_density_index]
+                taboo.append(taboo_oligo)
+
+                solution.pop(best_density_index)
+                sth_changed = True
+        return taboo, solution
+
+
+    def taboo(self, solution):
+        taboo = []
+        taboo, solution = self.shrink(solution)
+        # prepare offsets matrix
+        offsets = self.BASE_OFFSETS.copy()
+        # delete banned oligos
+        for t in solution[1:-1] + taboo:
+            offsets = np.delete(offsets, t, 0)
+            offsets = np.delete(offsets, t, 1)
+
+        # offsets for the longest one
+        longest_index = solution[0]
+
+        offsets[longest_index] = offsets[solution[-1]]
+        offsets = np.delete(offsets, solution[-1], 0)
+        offsets = np.delete(offsets, solution[-1], 1)
+
+        self.extend(offsets, longest_index)
+
+    def taboo_collage(self, left: int, right: int, offsets: np.ndarray):
+        # self.offsets for the new oligo
+        offsets[:, right] = offsets[:, left]
+        offsets[right][right] = 0
+
+        offsets = np.delete(offsets, left, 0)
+        offsets = np.delete(offsets, left, 1)
+        return offsets
+
+    #TODO: tu jesteśmy
+    def extend(self, offsets: np.ndarray, seq_index: int, solution):
+        lowest = 1
+
+        # stop when the sequence has desired length or no more oligos left
+        while (not any([len(x) >= self.SEQ_LENGTH for x in self.names])) and len(self.names) != 1:
+            sth_changed = False
+
+            row_without_main_diagonal = np.hstack((offsets[seq_index][:seq_index], offsets[seq_index][seq_index + 1:]))
+            lowest_in_row_index = np.argmin(row_without_main_diagonal)[0]
+
+            col_without_main_diagonal = np.hstack((offsets[:seq_index][seq_index], offsets[seq_index + 1:][seq_index]))
+            lowest_in_col_index = np.argmin(col_without_main_diagonal)[0]
+
+            if offsets[lowest_in_col_index][seq_index] > offsets[seq_index][lowest_in_row_index]:
+                # doklej na koniec
+                self.taboo_collage(seq_index, lowest_in_row_index, offsets)
+                #solution.append() #TODO: skąd wziąć BASE_NAMES indeks oligo, który doklejamy?
+
+            else:
+                # doklej na początek
+                self.taboo_collage(lowest_in_col_index, seq_index, offsets)
+                #TODO: i tu też
+
+        return solution
+
 
 if __name__ == "__main__":
     # logging.basicConfig(format='%(message)s', level=logging.DEBUG) #DEBUG, INFO, WARNING, ERROR, CRITICAL
