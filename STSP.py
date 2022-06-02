@@ -3,6 +3,7 @@ from random import shuffle
 import numpy as np
 from typing import *
 from random import choice
+from Taboo import Taboo
 
 class Collager:
     def __init__(self):
@@ -293,7 +294,6 @@ class Collager:
 
         left_name = self.names[old_row]
         right_name = self.names[old_col]
-        print(self.names[old_row], self.names[old_col], self.BASE_NAMES[self.names_components[left_name][0]], self.BASE_NAMES[self.names_components[right_name][0]])
 
         offset = self.offsets[old_row][old_col]
 
@@ -312,12 +312,9 @@ class Collager:
         logging.debug(right_name + '\n')
         self.names.pop(old_row)
 
-        print("old", old_row, old_col)
 
         # collage names components
         self.names_components[new_oligo_name] = self.names_components[left_name] + self.names_components[right_name]
-
-        print(self.names_components[new_oligo_name])
 
         if len(left_name) > self.OLIGO_LENGTH:
             self.names_components.pop(left_name)
@@ -333,111 +330,6 @@ class Collager:
         return True
 
 
-    def collage_base_oligos(self, left: int, right: int):
-        offset = self.BASE_OFFSETS[left][right]
-        print(f"{offset}, {self.BASE_OFFSETS[right][left]} ")
-        left_name = self.BASE_NAMES[left]
-        right_name = self.BASE_NAMES[right]
-
-        logging.info(left_name + '\n' + " " * (len(left_name) - self.OLIGO_LENGTH + offset) + right_name)
-
-        new_oligo_name = left_name[:len(left_name) - self.OLIGO_LENGTH + offset] + right_name[:]
-
-        print(new_oligo_name)
-        return new_oligo_name
-
-    def calc_density(self, solution: list) -> float:
-        logging.info("calc_density")
-        # collage sequence by indexes
-
-        used_oligos = len(solution)
-        collaged_sequence = self.BASE_NAMES[solution[0]]
-
-        for i in range(used_oligos - 1):
-            new_fragment = self.collage_base_oligos(solution[i], solution[i+1])
-            collaged_sequence = collaged_sequence[:-self.OLIGO_LENGTH] + new_fragment
-
-        logging.info(collaged_sequence + '\n' + " " * (len(collaged_sequence) - self.OLIGO_LENGTH) + new_fragment)
-
-        print(len(collaged_sequence), collaged_sequence)
-        return used_oligos/len(collaged_sequence)
-
-    def shrink(self, solution: list, taboo: list) -> tuple:
-        sth_changed = True
-        while sth_changed:
-            sth_changed = False
-            current_density = self.calc_density(solution)
-            best_density = current_density
-            best_density_index = -1
-
-            for i in range(len(solution)):
-                density = self.calc_density(solution[:i] + solution[i + 1:])
-                if density >= best_density:
-                    best_density = density
-                    best_density_index = i
-
-            if best_density_index != -1:
-                taboo_oligo= solution[best_density_index]
-                taboo.append(taboo_oligo)
-
-                solution.pop(best_density_index)
-                sth_changed = True
-        return taboo, solution
-
-
-    def taboo(self, solution):
-        taboo = []
-        taboo, solution = self.shrink(solution)
-        # prepare offsets matrix
-        offsets = self.BASE_OFFSETS.copy()
-        # delete banned oligos
-        for t in solution[1:-1] + taboo:
-            offsets = np.delete(offsets, t, 0)
-            offsets = np.delete(offsets, t, 1)
-
-        # offsets for the longest one
-        longest_index = solution[0]
-
-        offsets[longest_index] = offsets[solution[-1]]
-        offsets = np.delete(offsets, solution[-1], 0)
-        offsets = np.delete(offsets, solution[-1], 1)
-
-        self.extend(offsets, longest_index)
-
-    def taboo_collage(self, left: int, right: int, offsets: np.ndarray):
-        # self.offsets for the new oligo
-        offsets[:, right] = offsets[:, left]
-        offsets[right][right] = 0
-
-        offsets = np.delete(offsets, left, 0)
-        offsets = np.delete(offsets, left, 1)
-        return offsets
-
-    #TODO: tu jesteśmy
-    def extend(self, offsets: np.ndarray, seq_index: int, solution):
-        lowest = 1
-
-        # stop when the sequence has desired length or no more oligos left
-        while (not any([len(x) >= self.SEQ_LENGTH for x in self.names])) and len(self.names) != 1:
-            sth_changed = False
-
-            row_without_main_diagonal = np.hstack((offsets[seq_index][:seq_index], offsets[seq_index][seq_index + 1:]))
-            lowest_in_row_index = np.argmin(row_without_main_diagonal)[0]
-
-            col_without_main_diagonal = np.hstack((offsets[:seq_index][seq_index], offsets[seq_index + 1:][seq_index]))
-            lowest_in_col_index = np.argmin(col_without_main_diagonal)[0]
-
-            if offsets[lowest_in_col_index][seq_index] > offsets[seq_index][lowest_in_row_index]:
-                # doklej na koniec
-                self.taboo_collage(seq_index, lowest_in_row_index, offsets)
-                #solution.append() #TODO: skąd wziąć BASE_NAMES indeks oligo, który doklejamy?
-
-            else:
-                # doklej na początek
-                self.taboo_collage(lowest_in_col_index, seq_index, offsets)
-                #TODO: i tu też
-
-        return solution
 
 
 if __name__ == "__main__":
@@ -445,15 +337,23 @@ if __name__ == "__main__":
     logging.basicConfig(format='%(message)s', level=logging.INFO)
 
     path = "./data"
-    file_name = '9.200-40'
+    file_name = '9.200+20'
     collager = Collager()
     collager.read_instance_from_file(path, file_name)
     collager.run_collager()
 
     res = collager.names[np.argmax([len(a) for a in collager.names])]
+    indexes_in_solution = collager.names_components[res]
 
-    print(collager.calc_density(collager.names_components[res]))
+    # print(collager.calc_density(collager.names_components[res]))
+
+    taboo = Taboo(collager.BASE_OFFSETS, collager.BASE_NAMES, indexes_in_solution, collager.SEQ_LENGTH)
+    solution = taboo.run()
+    # collager.taboo(collager.names_components[res])
 
     logging.debug(f"{collager.names}\n{collager.offsets}")
     print(
         f"\n---\nStan końcowy: {collager.names}\n{[len(a) for a in collager.names]}\n{max([len(a) for a in collager.names])}\n\nPoszukiwana sekwencja to: {res}")
+
+    taboo_seq = solution
+    print(f"\n---\nStan po taboo: {taboo_seq}\nDlugosc: {len(taboo_seq)}\n")
