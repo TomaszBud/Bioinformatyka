@@ -355,5 +355,5 @@ if __name__ == "__main__":
     print(
         f"\n---\nStan końcowy: {collager.names}\n{[len(a) for a in collager.names]}\n{max([len(a) for a in collager.names])}\n\nPoszukiwana sekwencja to: {res}")
 
-    taboo_seq = solution
-    print(f"\n---\nStan po taboo: {taboo_seq}\nDlugosc: {len(taboo_seq)}\n")
+    taboo_seq = taboo.collage_sequence_from_solution(solution)
+    print(f"\n---\nStan po taboo: {taboo_seq}\nDlugosc: {len(taboo_seq)}\ndensity: {taboo.calc_density(solution, len(taboo_seq))}\nUsed oligos len: {len(solution)}")

@@ -3,6 +3,7 @@ import numpy as np
 import logging
 # x = pd.DataFrame(np.array(range(9)).reshape((3,3)), index=['a', 'b', 'c'], columns=['a', 'b', 'c'])
 
+
 class Taboo:
     def __init__(self, base_offsets, base_names, solution, seq_len):
         self.BASE = pd.DataFrame(base_offsets, index=base_names, columns=base_names, dtype=int)
@@ -16,7 +17,7 @@ class Taboo:
         print(self.BASE)
 
     def run(self):
-        self.shrink()
+        seq_len = self.shrink()
         # prepare offsets matrix
         offsets = self.BASE.copy()
 
@@ -33,37 +34,56 @@ class Taboo:
         offsets.drop(self.solution[-1], axis=1, inplace=True)
         offsets.drop(self.solution[-1], axis=0, inplace=True)
 
-        self.extend(longest, offsets)
-        print("result:", self.calc_density(self.solution), offsets)
+        seq_len = self.extend(longest, offsets)
+        print("result:", self.calc_density(self.solution, seq_len), "\nUsed oligos len: ", len(self.solution))
 
-        return self.collage_sequence_from_solution(self.solution)
+        return self.solution
 
     def shrink(self):
         """ delete oligos, which make density worse"""
 
         print("shrink")
         sth_changed = True
-        while sth_changed:
+        seq_len = len(self.collage_sequence_from_solution(self.solution))
+        while sth_changed :
             sth_changed = False
-            current_density = self.calc_density(self.solution)
+            current_density = self.calc_density(self.solution, seq_len)
             print(f"dens: {current_density}")
             best_density = current_density
             best_density_index = -1
 
             # find the one to eliminate
             for i in range(len(self.solution)):
-                density = self.calc_density(self.solution[:i] + self.solution[i + 1:])
+                temp_seq_len = self.calc_seq_len(i, self.solution, seq_len)
+                density = self.calc_density(self.solution[:i] + self.solution[i + 1:], temp_seq_len)
                 if density >= best_density:
                     best_density = density
                     best_density_index = i
 
             # eliminate it
             if best_density_index != -1:
-                taboo_oligo = self.solution[best_density_index]
-                self.taboo.append(taboo_oligo)
-
+                seq_len = self.calc_seq_len(best_density_index, self.solution, seq_len)
+                self.taboo.append(self.solution[best_density_index])
                 self.solution.pop(best_density_index)
+                print(seq_len, len(self.collage_sequence_from_solution(self.solution)))
+
                 sth_changed = True
+        return seq_len
+
+    def calc_seq_len(self, best_density_index, solution, seq_len):
+        taboo_oligo = solution[best_density_index]
+        if best_density_index == 0:
+            next_oligo = self.solution[best_density_index + 1]
+            return seq_len - self.BASE[next_oligo][taboo_oligo]
+        elif best_density_index == len(solution) - 1:
+            prev_oligo = self.solution[best_density_index - 1]
+            return seq_len - self.BASE[taboo_oligo][prev_oligo]
+        else:
+            prev_oligo = self.solution[best_density_index - 1]
+            next_oligo = self.solution[best_density_index + 1]
+            seq_len -= self.BASE[taboo_oligo][prev_oligo] - (self.OLIGO_LENGTH - self.BASE[next_oligo][taboo_oligo])
+            seq_len -= self.OLIGO_LENGTH - self.BASE[next_oligo][prev_oligo]
+            return seq_len
 
     def extend(self, the_one: str, offsets: pd.DataFrame):
         """Add oligos to the_one to extend its lenght"""
@@ -85,13 +105,14 @@ class Taboo:
                 self.solution.append(lowest_in_row)
                 seq_len += offsets[lowest_in_row][the_one]
                 self.change_offsets(the_one, lowest_in_row, offsets)
-
-
             else:
                 # doklej na początek
                 self.solution.insert(0, lowest_in_col)
                 seq_len += offsets[the_one][lowest_in_col]
                 self.change_offsets(lowest_in_col, the_one, offsets)
+                the_one = lowest_in_col
+            print(seq_len)
+        return seq_len
 
     def collage_base_oligos(self, left: str, right: str):
         """collage two oligos based on their offset"""
@@ -114,16 +135,16 @@ class Taboo:
 
         return collaged_sequence
 
-    def calc_density(self, solution: list) -> float:
+    def calc_density(self, solution: list, seq_len: int) -> float:
         """ how many oligos used for the sequence with this length """
         # collage sequence by indexes
 
         used_oligos = len(solution)
-        collaged_sequence = self.collage_sequence_from_solution(solution)
+        collaged_sequence = seq_len
 
         # print(collaged_sequence + '\n' + " " * (len(collaged_sequence) - self.OLIGO_LENGTH) + new_fragment)
 
-        return used_oligos / len(collaged_sequence)
+        return used_oligos / collaged_sequence
 
     @staticmethod
     def change_offsets(left: str, right: str, offsets: pd.DataFrame):
@@ -132,8 +153,8 @@ class Taboo:
         offsets.loc[right] = offsets.loc[left]
         offsets[right][right] = 0
 
-        offsets.drop(columns=left, inplace=True)
-        offsets.drop(rows=left, inplace=True)
+        offsets.drop(left, axis=1, inplace=True)
+        offsets.drop(left, axis=0, inplace=True)
 
         # offsets[:, right] = offsets[:, left]
         # offsets[right][right] = 0
