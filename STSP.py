@@ -338,22 +338,23 @@ if __name__ == "__main__":
 
     path = "./data"
     file_name = '9.200+20'
-    collager = Collager()
-    collager.read_instance_from_file(path, file_name)
-    collager.run_collager()
+    while True:
+        collager = Collager()
+        collager.read_instance_from_file(path, file_name)
+        collager.run_collager()
 
-    res = collager.names[np.argmax([len(a) for a in collager.names])]
-    indexes_in_solution = collager.names_components[res]
+        res = collager.names[np.argmax([len(a) for a in collager.names])]
+        indexes_in_solution = collager.names_components[res]
 
-    # print(collager.calc_density(collager.names_components[res]))
+        # print(collager.calc_density(collager.names_components[res]))
 
-    taboo = Taboo(collager.BASE_OFFSETS, collager.BASE_NAMES, indexes_in_solution, collager.SEQ_LENGTH)
-    solution = taboo.run()
-    # collager.taboo(collager.names_components[res])
+        taboo = Taboo(collager.BASE_OFFSETS, collager.BASE_NAMES, indexes_in_solution, collager.SEQ_LENGTH)
+        solution = taboo.run()
+        # collager.taboo(collager.names_components[res])
 
-    logging.debug(f"{collager.names}\n{collager.offsets}")
-    print(
-        f"\n---\nStan końcowy: {collager.names}\n{[len(a) for a in collager.names]}\n{max([len(a) for a in collager.names])}\n\nPoszukiwana sekwencja to: {res}")
+        logging.debug(f"{collager.names}\n{collager.offsets}")
+        print(
+            f"\n---\nStan końcowy: {collager.names}\n{[len(a) for a in collager.names]}\n{max([len(a) for a in collager.names])}\n\nPoszukiwana sekwencja to: {res}")
 
-    taboo_seq = taboo.collage_sequence_from_solution(solution)
-    print(f"\n---\nStan po taboo: {taboo_seq}\nDlugosc: {len(taboo_seq)}\ndensity: {taboo.calc_density(solution, len(taboo_seq))}\nUsed oligos len: {len(solution)}")
+        taboo_seq = taboo.collage_sequence_from_solution(solution)
+        print(f"\n---\nStan po taboo: {taboo_seq}\nDlugosc: {len(taboo_seq)}\ndensity: {taboo.calc_density(solution, len(taboo_seq))}\nUsed oligos len: {len(solution)}")

@@ -17,6 +17,8 @@ class Taboo:
         print(self.BASE)
 
     def run(self):
+        # TODO: heurystyka
+
         seq_len = self.shrink()
         # prepare offsets matrix
         offsets = self.BASE.copy()
@@ -45,11 +47,11 @@ class Taboo:
         print("shrink")
         sth_changed = True
         seq_len = len(self.collage_sequence_from_solution(self.solution))
-        while sth_changed :
+        while sth_changed or seq_len > self.SEQ_LENGTH:
             sth_changed = False
             current_density = self.calc_density(self.solution, seq_len)
             print(f"dens: {current_density}")
-            best_density = current_density
+            best_density = 0
             best_density_index = -1
 
             # find the one to eliminate
@@ -61,7 +63,7 @@ class Taboo:
                     best_density_index = i
 
             # eliminate it
-            if best_density_index != -1:
+            if best_density > current_density or seq_len > self.SEQ_LENGTH:
                 seq_len = self.calc_seq_len(best_density_index, self.solution, seq_len)
                 self.taboo.append(self.solution[best_density_index])
                 self.solution.pop(best_density_index)
@@ -87,13 +89,14 @@ class Taboo:
 
     def extend(self, the_one: str, offsets: pd.DataFrame):
         """Add oligos to the_one to extend its lenght"""
+        print("extend")
         lowest = 1
         seq_len = len(self.collage_sequence_from_solution(self.solution))
 
         # stop when the sequence has desired length or no more oligos left
         while (not seq_len >= self.SEQ_LENGTH) and offsets.shape[0] != 1:
             sth_changed = False
-
+            # TODO: remember about last added oligo and delete it when seq_len exceeds SEQ_LENGTH
             row_without_main_diagonal = offsets.loc[the_one].drop(the_one)
             lowest_in_row = row_without_main_diagonal.idxmin()
 
@@ -105,12 +108,14 @@ class Taboo:
                 self.solution.append(lowest_in_row)
                 seq_len += offsets[lowest_in_row][the_one]
                 self.change_offsets(the_one, lowest_in_row, offsets)
+                the_one = lowest_in_row
+                print("na koniec")
             else:
                 # doklej na początek
                 self.solution.insert(0, lowest_in_col)
                 seq_len += offsets[the_one][lowest_in_col]
                 self.change_offsets(lowest_in_col, the_one, offsets)
-                the_one = lowest_in_col
+                print("na poczatek")
             print(seq_len)
         return seq_len
 
