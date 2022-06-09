@@ -356,7 +356,7 @@ if __name__ == "__main__":
           f"Poszukiwana sekwencja: {res}\n---\n", sep="\n")
 
     if seq_len == collager.SEQ_LENGTH:
-        best_solution = ([collager.names[i] for i in indexes_in_solution], density)
+        best_solution = ([collager.BASE_NAMES[i] for i in indexes_in_solution], density)
         if len(collager.names) != 1:  # dla negatywnych
             exit(0)
 
