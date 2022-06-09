@@ -5,15 +5,16 @@ import numpy as np
 import logging
 
 
-def run_algorithm(file_name, show=False):
+def run_algorithm(file_name, path="data/", show=False):
     best_solution = ([], 0)
-    path = "data/"
 
     collager = Collager()
-    collager.read_instance_from_file(path, file_name)
-    start = time.time()
-    collager.run_collager()
-    end = time.time()
+    res = 'KeyError'
+    while res == 'KeyError':
+        collager.read_instance_from_file(path, file_name)
+        start = time.time()
+        res = collager.run_collager()
+        end = time.time()
 
     res = collager.names[np.argmax([len(a) for a in collager.names])]
     indexes_in_solution = collager.names_components[res]
@@ -21,8 +22,11 @@ def run_algorithm(file_name, show=False):
     density = len(indexes_in_solution) / len(res)
     collager_time = end-start
 
-    if (pos := file_name.find("-")) > 0:
-        desired_density = (collager.SEQ_LENGTH - collager.OLIGO_LENGTH + 1) - int(file_name[pos+1:]) / collager.SEQ_LENGTH
+    if file_name.find("-") > 0:
+        if file_name.find("+") > 0:
+            desired_density = (collager.SEQ_LENGTH - collager.OLIGO_LENGTH + 1) / collager.SEQ_LENGTH
+        else:
+            desired_density = (collager.SEQ_LENGTH - collager.OLIGO_LENGTH + 1 - int(file_name.split("-")[1])) / collager.SEQ_LENGTH
     else:
         desired_density = (collager.SEQ_LENGTH - collager.OLIGO_LENGTH + 1) / collager.SEQ_LENGTH
 
@@ -61,5 +65,6 @@ def run_algorithm(file_name, show=False):
 
     return len(taboo_seq), density, desired_density - density, len(solution), collager_time, taboo_time, se.best_density
 
+
 if __name__ == '__main__':
-    run_algorithm('9.200+20', show=True)
+    run_algorithm('18.200+80', show=True)

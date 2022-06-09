@@ -1,10 +1,5 @@
 import pandas as pd
-import logging
-import numpy as np
 from random import shuffle
-
-
-# x = pd.DataFrame(np.array(range(9)).reshape((3,3)), index=['a', 'b', 'c'], columns=['a', 'b', 'c'])
 
 
 class ShrinkoExtenderoinator:
@@ -18,24 +13,16 @@ class ShrinkoExtenderoinator:
         self.best_density = (best_solution[1], len(best_solution[0]))
 
     def run(self) -> list:
+        print("run")
         """
         :return: solution – names of oligonucleotides in sequence
         """
-        seq_len = 1
         max_iterations = 3
-        iteration_no = 0
 
         density = 0
-        while (self.calc_density(self.solution, seq_len) < 0.70) and \
-                iteration_no < max_iterations:
-            # print("run")
+        for i in range(max_iterations):
             prev_density = density
-
             seq_len = self.shrink()
-            # print(seq_len)
-
-            # TODO: później usunąć (ewentualnie naprawić)
-
 
             # prepare offsets matrix
             offsets = self.BASE.copy()
@@ -44,7 +31,6 @@ class ShrinkoExtenderoinator:
             for t in self.solution[1:-1]:
                 offsets.drop(t, axis=0, inplace=True)
                 offsets.drop(t, axis=1, inplace=True)
-            # print(f"in main: {len(self.solution)}")
 
             # offsets for the longest oligo
             longest = self.solution[0]
@@ -56,37 +42,22 @@ class ShrinkoExtenderoinator:
 
             seq_len = self.extend(longest, offsets)
             density = self.calc_density(self.solution, seq_len)
-            # print(density)
 
             if seq_len == self.SEQ_LENGTH and density > self.best_solution[1]:
                 self.best_solution = (self.solution.copy(), density)  # remember it
-                # if iteration_no != 0:
-                #     print(f"new best: {self.best_solution[1]} {iteration_no}")
 
             if density > self.best_density[0]:
                 self.best_density = (density, seq_len)
-                # if iteration_no != 0:
-                #     print(f"new_best_density: {self.best_density[0]} {iteration_no} {seq_len}")
 
-            iteration_no += 1
-            # print(f"pętla główna{iteration_no}, {iterations_without_improvement}")
-
-        # print(density, self.best_solution[1])
-
-        # print(f"best_density {self.best_density}")
         if self.best_solution[1] > density:
             return self.best_solution[0]  # back to better result
         else:
             return self.solution
 
     def shrink(self):
-        #TODO: dlaczego się zapętla
         """ delete oligos, which make density worse"""
-        # print("---\nshrink")
 
-        # TODO: jak mocno skracać?
         min_len = self.SEQ_LENGTH - self.OLIGO_LENGTH*2  # teraz pogarsza najlepsze rozwiązanie
-        min_density = 0.70  # TODO: dobrać parametr
 
         sth_changed = True
         seq_len = len(self.collage_sequence_from_solution(self.solution))
@@ -100,7 +71,6 @@ class ShrinkoExtenderoinator:
 
             sth_changed = False
             current_density = self.calc_density(self.solution, seq_len)
-            # print(current_density)
 
             best_density = 0
             best_density_index = -1
@@ -119,17 +89,10 @@ class ShrinkoExtenderoinator:
             if best_density > current_density or seq_len > min_len:  # or current_density < min_density
                 seq_len = self.calc_seq_len(best_density_index, self.solution, seq_len)
 
-                # print(f"eliminate {best_density_index} {self.solution[best_density_index]} {len(self.solution)}")
-
                 self.solution.pop(best_density_index)
 
                 sth_changed = True
-
-            # TODO: usunąć
-            if seq_len != len(self.collage_sequence_from_solution(self.solution)):
-                print("znowu źle liczy długość...")
-        # print(f"seq_len: {seq_len}, {len(self.collage_sequence_from_solution(self.solution))}")
-        # print(self.solution)
+        # print(f"shrink {seq_len}")
         return seq_len
 
     def calc_seq_len(self, oligo_to_del_index, solution, seq_len):
@@ -157,7 +120,6 @@ class ShrinkoExtenderoinator:
 
     def extend(self, the_one: str, offsets: pd.DataFrame):
         """Add oligos to the_one to extend its lenght"""
-        # print("extend")
         seq_len = len(self.collage_sequence_from_solution(self.solution))
         last_change = None
 
@@ -174,27 +136,21 @@ class ShrinkoExtenderoinator:
                 # doklej offsets[the_one][lowest_in_col] na początek
 
                 last_change = f'b{offsets[the_one][lowest_in_col]}'
-                # print("na poczatek", offsets[the_one][lowest_in_col])
 
                 self.solution.insert(0, lowest_in_col)
                 seq_len += offsets[the_one][lowest_in_col]
                 self.change_offsets(lowest_in_col, the_one, offsets)
-
-                # print(f"dodaje {self.solution[0]}")
 
 
             else:
                 # doklej offsets[lowest_in_row][the_one] na koniec
 
                 last_change = f'e{offsets[lowest_in_row][the_one]}'
-                # print("na koniec", offsets[lowest_in_row][the_one])
                 self.solution.append(lowest_in_row)
                 seq_len += offsets[lowest_in_row][the_one]
 
                 self.change_offsets(the_one, lowest_in_row, offsets)
                 the_one = lowest_in_row
-
-                # print(f"dodaje {self.solution[-1]}")
 
 
         if seq_len > self.SEQ_LENGTH:
@@ -208,17 +164,15 @@ class ShrinkoExtenderoinator:
         if seq_len != len(self.collage_sequence_from_solution(self.solution)):
             print("znowu źle liczy długość...")
 
+        # print(f"extend {seq_len}")
         return seq_len
 
     def collage_base_oligos(self, left: str, right: str):
         """collage two oligos based on their offset"""
+
         offset = self.BASE[right][left]
-
-        # logging.info('\n'+ left + '\n' + " " * (len(left) - self.OLIGO_LENGTH + offset) + right)
-
         new_oligo_name = left[:len(left) - self.OLIGO_LENGTH + offset] + right[:]
 
-        # logging.info(new_oligo_name)
         return new_oligo_name
 
     def collage_sequence_from_solution(self, solution: list):
@@ -229,7 +183,6 @@ class ShrinkoExtenderoinator:
             new_fragment = self.collage_base_oligos(solution[i], solution[i + 1])
             collaged_sequence = collaged_sequence[:-self.OLIGO_LENGTH] + new_fragment
 
-        # print(self.solution, collaged_sequence)
         return collaged_sequence
 
     def calc_density(self, solution: list, seq_len: int) -> float:
@@ -241,8 +194,7 @@ class ShrinkoExtenderoinator:
 
     @staticmethod
     def change_offsets(left: str, right: str, offsets: pd.DataFrame):
-        # self.offsets for the new oligo
-        """change offsets and delete used oligos"""
+        """change offsets for the new oligo"""
         offsets[right] = offsets[left]
         offsets[right][right] = 0
         offsets.drop(left, axis=1, inplace=True)

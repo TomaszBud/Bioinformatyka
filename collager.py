@@ -4,6 +4,7 @@ import numpy as np
 from typing import *
 from random import choice
 
+
 class Collager:
     def __init__(self):
         self.names = []  # all oligonucleotides
@@ -26,7 +27,6 @@ class Collager:
                 self.BASE_NAMES.append(oligo)
         logging.info(self.names_components)
 
-
         shuffle(self.BASE_NAMES)
         self.names = self.BASE_NAMES.copy()
         for i, name in enumerate(self.BASE_NAMES):
@@ -37,7 +37,6 @@ class Collager:
         self.oligos_left = len(self.names)
 
         self.SEQ_LENGTH = int(file_name.split(".")[1].replace("-", ",").replace("+", ",").split(",")[0]) + self.OLIGO_LENGTH - 1
-
 
     def update_variables(self) -> bool:
         logging.debug("czyszczenie")
@@ -54,66 +53,56 @@ class Collager:
 
     def run_collager(self, f_param=3, extra_collaging=True, forbidden_names=set()):
         lowest = 1
+        try:
+            # stop when the sequence has desired length or no more oligos left
+            while (not any([len(x) >= self.SEQ_LENGTH for x in self.names])) and len(self.names) != 1 and len(self.names) > len(forbidden_names) + 1:
+                sth_changed = False
+                self.row = 0
 
-        # stop when the sequence has desired length or no more oligos left
-        while (not any([len(x) >= self.SEQ_LENGTH for x in self.names])) and len(self.names) != 1 and len(self.names) > len(forbidden_names) + 1:
-            sth_changed = False
-            self.row = 0
+                while self.row < self.oligos_left:
+                    if self.names[self.row] not in forbidden_names:
+                        # is offset in this row?
+                        lowest_in_row = (self.offsets[self.row] == lowest)
+                        nr_of_lowest_in_row = sum(lowest_in_row)
 
-            while self.row < self.oligos_left:
-                # logging.debug( f"Row is forbidden: {self.names[self.row] in forbidden_names}. Row: {self.names[self.row]}.\nForbidden {forbidden_names}")
-                if self.names[self.row] not in forbidden_names:
-                    # is offset in this row?
-                    lowest_in_row = (self.offsets[self.row] == lowest)
-                    nr_of_lowest_in_row = sum(lowest_in_row)
+                        if nr_of_lowest_in_row > 1:
+                            self.repeated_offsets_rows.add(self.row)
+                            logging.debug(f"Nowy konflikt w wierszu {self.row}")
 
-                    if nr_of_lowest_in_row > 1:
-                        self.repeated_offsets_rows.add(self.row)
-                        logging.debug(f"Nowy konflikt w wierszu {self.row}")
+                        elif nr_of_lowest_in_row == 1:
+                            # only one such offset in row - check column
+                            self.col = np.argwhere(lowest_in_row)[0][0]
 
-                    elif nr_of_lowest_in_row == 1:
-                        # only one such offset in row - check column
-                        self.col = np.argwhere(lowest_in_row)[0][0]
+                            if self.names[self.col] not in forbidden_names and self.row != self.col:
+                                lowest_in_col = self.offsets[:, self.col] == lowest
+                                nr_of_lowest_in_col = sum(lowest_in_col)
 
-                        if self.names[self.col] not in forbidden_names and self.row != self.col:
-                            lowest_in_col = self.offsets[:, self.col] == lowest
-                            nr_of_lowest_in_col = sum(lowest_in_col)
+                                if nr_of_lowest_in_col > 1:
+                                    self.repeated_offsets_cols.add(self.col)
+                                    logging.debug(f"Nowy konflikt w kolumnie {self.col}")
+                                else:
+                                    # only one such offset in col - process it
+                                    self.collage_oligonucleotides(self.row, self.col)
+                                    logging.debug(f"nowe offsety:\n{self.offsets}")
+                                    sth_changed = True
+                                    break
 
-                            if nr_of_lowest_in_col > 1:
-                                self.repeated_offsets_cols.add(self.col)
-                                logging.debug(f"Nowy konflikt w kolumnie {self.col}")
-                            else:
-                                # only one such offset in col - process it
-                                self.collage_oligonucleotides(self.row, self.col)
-                                logging.debug(f"nowe offsety:\n{self.offsets}")
-                                sth_changed = True
-                                break
+                    self.row += 1
+                    self.col = 0
 
-                self.row += 1
-                self.col = 0
+                # CONFLICTS SOLVING
+                if not sth_changed:
+                    sth_changed = self.solve_conflicts(lowest)
 
-                """
-                #NOTE: problem z tym rozwiązaniem:
-                przy [[1,2,1],
-                      [1,0,1]]
-                wykryje tylko konflikty w wierszach. Czy to nam przeszkadza?
-                """
+                if extra_collaging and lowest > self.OLIGO_LENGTH / f_param:
+                    self.try_to_collage(lowest)
+                    self.update_variables()
 
-            # CONFLICTS SOLVING
-            if not sth_changed:
-                sth_changed = self.solve_conflicts(lowest)
-                if not sth_changed: logging.debug("Nic się nie zmieniło w tej iteracji")
-
-            if extra_collaging and lowest > self.OLIGO_LENGTH / f_param:   #TODO: dobrać parametr
-                logging.debug("extra_collaging")
-                self.try_to_collage(lowest)
-                self.update_variables()
-
-            if not any([y == lowest for y in self.offsets.flatten()]) or not sth_changed:
-                lowest += 1
-                logging.debug(f"New offset: {lowest}")
-
-            logging.debug(f"Oligos left: {len(self.names)}\n")
+                if not any([y == lowest for y in self.offsets.flatten()]) or not sth_changed:
+                    lowest += 1
+        except KeyError:
+            print('KeyError')
+            return 'KeyError'
 
         return self.names
 
@@ -262,21 +251,13 @@ class Collager:
                 flag = True
                 break
 
-        if not flag:
-            logging.error("ALARM!!! TU NIE POWINIEN BYĆ")  # nie wejdzie, jeżeli będzie miał za mało oligo, żeby stworzyć pełną sekwencję
-            # how_many_oligos = len(self.names)
+        if not flag:  # nie wejdzie, jeżeli będzie miał za mało oligo, żeby stworzyć pełną sekwencję
             return None
-
-        logging.debug(f"wybrał {how_many_oligos} oligo")
-        logging.debug(f"Ich długości: {[len(self.names[x]) for x in names_order[:how_many_oligos]]}")
 
         # tworzy listę nazw oligonukleotydów, których nie może użyć do składania sekwencji
         forbidden = set(np.delete(self.names.copy(), names_order[:how_many_oligos]))
-        logging.debug(f"Forbidden {forbidden}")
 
         self.run_collager(extra_collaging=False, forbidden_names=forbidden)
-
-        #BUG: czasem są lepsze offsety wśród zakazanych oligo i nie zwiększa offset, ale też nic nie może zrobić, bo wszystkie zbiory są puste
 
     def collage_oligonucleotides(self, old_row: int, old_col: int):
         """
@@ -288,8 +269,6 @@ class Collager:
         """
 
         logging.debug("\nCollage")
-
-        # left_base_name = self.BASE_NAMES.index(self.names[old_row][-self.OLIGO_LENGTH:])
 
         left_name = self.names[old_row]
         right_name = self.names[old_col]
@@ -310,7 +289,6 @@ class Collager:
         self.names[old_col] = new_oligo_name
         logging.debug(right_name + '\n')
         self.names.pop(old_row)
-
 
         # collage names components
         self.names_components[new_oligo_name] = self.names_components[left_name] + self.names_components[right_name]
