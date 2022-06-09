@@ -115,6 +115,7 @@ class Taboo:
             logging.warning("źle dobrany czas w taboo")
 
     def shrink(self):
+        #TODO: dlaczego się zapętla
         """ delete oligos, which make density worse"""
         # print("shrink")
 
