@@ -338,6 +338,7 @@ if __name__ == "__main__":
 
     path = "./data"
     file_name = '9.200+20'
+    best_solution = ([], 0)
 
     collager = Collager()
     collager.read_instance_from_file(path, file_name)
@@ -345,16 +346,31 @@ if __name__ == "__main__":
 
     res = collager.names[np.argmax([len(a) for a in collager.names])]
     indexes_in_solution = collager.names_components[res]
+    seq_len = max([len(a) for a in collager.names])
+    density = len(indexes_in_solution)/ len(res)
 
     logging.debug(f"{collager.names}\n{collager.offsets}")
-    print(
-        f"\n---\nStan po collagerze: {collager.names}\n{[len(a) for a in collager.names]}\n{max([len(a) for a in collager.names])}\n\nPoszukiwana sekwencja to: {res}\n---\n")
+    print(f"\n---\nStan po collagerze:",
+          f"długość sekwencji:{seq_len}",
+          f"zagęszczenie: {density}\n",
+          f"Poszukiwana sekwencja: {res}\n---\n", sep="\n")
+
+    if seq_len == collager.SEQ_LENGTH:
+        best_solution = ([collager.names[i] for i in indexes_in_solution], density)
+        if len(collager.names) != 1:  # dla negatywnych
+            exit(0)
 
     # print(collager.calc_density(collager.names_components[res]))
 
-    taboo = Taboo(collager.BASE_OFFSETS, collager.BASE_NAMES, indexes_in_solution, collager.SEQ_LENGTH)
+    taboo = Taboo(collager.BASE_OFFSETS, collager.BASE_NAMES, indexes_in_solution, collager.SEQ_LENGTH, best_solution)
     solution = taboo.run()
     # collager.taboo(collager.names_components[res])
 
     taboo_seq = taboo.collage_sequence_from_solution(solution)
-    print(f"\n---\nStan po taboo:\n{solution}\n {taboo_seq}\nDlugosc: {len(taboo_seq)}\ndensity: {taboo.calc_density(solution, len(taboo_seq))}\nUsed oligos len: {len(solution)}")
+    print(f"\n---\nStan po taboo:",
+          f"długość sekwencji:{len(taboo_seq)}",
+          f"zagęszczenie: {taboo.calc_density(solution, len(taboo_seq))}\n",
+          f"Poszukiwana sekwencja: {taboo_seq}",
+          f"Użyto {len(solution)} oligonukleotydów\n---\n", sep="\n")
+
+    logging.info(f"odległość od pożądanego wyniku: {(collager.SEQ_LENGTH-collager.OLIGO_LENGTH+1) - len(solution)}")

@@ -1,34 +1,57 @@
 import pandas as pd
 import logging
 import numpy as np
+
+
 # x = pd.DataFrame(np.array(range(9)).reshape((3,3)), index=['a', 'b', 'c'], columns=['a', 'b', 'c'])
 
 
 class Taboo:
-    def __init__(self, base_offsets, base_names, solution, seq_len):
-        self.BASE = pd.DataFrame(base_offsets, index=base_names, columns=base_names, dtype=int)  # offset matrix with cols and rows names = nucleotides names
+    def __init__(self, base_offsets, base_names, solution, seq_len, best_solution):
+        self.BASE = pd.DataFrame(base_offsets, index=base_names, columns=base_names,
+                                 dtype=int)  # offset matrix with cols and rows names = nucleotides names
         self.solution = [base_names[i] for i in solution]  # not joined oligo names included in solution
         self.OLIGO_LENGTH = len(base_names[0])  # length of basic oligo
-        self.SEQ_LENGTH = seq_len   # desired seq lenght
-        self.TABOO_TIME = 3     # how long can oligo be in taboo list
-        self.taboo = [[], []]   # oligos' names and time left for them in taboo list
+        self.SEQ_LENGTH = seq_len  # desired seq lenght
+        self.TABOO_TIME = 3  # how long can oligo be in taboo list
+        self.taboo = [[], []]  # oligos' names and time left for them in taboo list
+        self.best_solution = best_solution
+        print(best_solution)
+        self.best_density = (best_solution[1], len(best_solution[0]))
 
-        logging.basicConfig(format='%(message)s', level=logging.DEBUG)
-
-    def run(self):
+    def run(self) -> list:
         """
         taboo heuristics
-        :return:
+        :return: solution – names of oligonucleotides in sequence
         """
         seq_len = 0
+        iterations_without_improvement = 0
+        max_i_without_improvement = 10
+        max_iterations = 20
+        iteration_no = 0
+        epsilon = 0.01
 
-        while seq_len != self.SEQ_LENGTH or self.calc_density(self.solution, seq_len) < 0.70:  #TODO: co jak będzie dużo negatywnych?
+        density = 0
+
+
+        # TODO: czy na pewno kończyć przy SEQ_LENGTH?
+        while (iterations_without_improvement < max_i_without_improvement or\
+                self.calc_density(self.solution, seq_len) < 0.70) and \
+                iteration_no < max_iterations:
             print("run")
+            prev_density = density
             self.update_taboo()
             # print(self.taboo[1])
 
             seq_len = self.shrink()
             # print(self.taboo[1])
+            print(seq_len)
+
+            # TODO: później usunąć (ewentualnie naprawić)
+            if len(self.taboo) > 0 \
+                    and len(self.solution) == 1 \
+                    and len(self.collage_sequence_from_solution(self.solution)) < self.SEQ_LENGTH:
+                logging.warning("za dużo w taboo")
 
             # prepare offsets matrix
             offsets = self.BASE.copy()
@@ -38,7 +61,6 @@ class Taboo:
                 offsets.drop(t, axis=0, inplace=True)
                 offsets.drop(t, axis=1, inplace=True)
 
-
             # offsets for the longest oligo
             longest = self.solution[0]
 
@@ -47,11 +69,33 @@ class Taboo:
             offsets.drop(self.solution[-1], axis=1, inplace=True)
             offsets.drop(self.solution[-1], axis=0, inplace=True)
 
+
             seq_len = self.extend(longest, offsets)
-            print("result:", self.calc_density(self.solution, seq_len), "\nUsed oligos len: ", len(self.solution))
+            density = self.calc_density(self.solution, seq_len)
+            print(seq_len)
 
-        return self.solution
+            if seq_len == self.SEQ_LENGTH and density > self.best_solution[1]:
+                self.best_solution = (self.solution.copy(), density)  # remember it
+                print(f"new best: {self.best_solution}")
 
+            if density > self.best_density[0]:
+                self.best_density = (density, seq_len)
+
+            if density - prev_density < epsilon:
+                iterations_without_improvement += 1
+            else:
+                iterations_without_improvement = 0
+
+            iteration_no += 1
+            print(f"pętla główna{iteration_no}, {iterations_without_improvement}")
+
+        print(density, self.best_solution[1])
+
+        print(f"best_density {self.best_density}")
+        if self.best_solution[1] > density:
+            return self.best_solution[0]  # back to better result
+        else:
+            return self.solution
 
     def update_taboo(self):
         """
@@ -65,18 +109,34 @@ class Taboo:
                 self.taboo[1].pop(i)
             i += 1
 
+        # TODO: później usunąć (ewentualnie naprawić)
+        if len(self.taboo) > 0 \
+                and len(self.solution) == 1 \
+                and len(self.collage_sequence_from_solution(self.solution)) < self.SEQ_LENGTH:
+            logging.warning("źle dobrany czas w taboo")
 
     def shrink(self):
         """ delete oligos, which make density worse"""
-        #TODO: shrink powinien bardziej skracać. Skrócił do 207, później extend do 214 i tak w kółko.
-        min_len = self.SEQ_LENGTH-self.OLIGO_LENGTH # teraz pogarsza najlepsze rozwiązanie
-
         print("shrink")
+
+        # TODO: jak mocno skracać?
+        min_len = self.SEQ_LENGTH - self.OLIGO_LENGTH*4  # teraz pogarsza najlepsze rozwiązanie
+        min_density = 0.70  # TODO: dobrać parametr
+
         sth_changed = True
         seq_len = len(self.collage_sequence_from_solution(self.solution))
-        while sth_changed or seq_len > min_len:
+        current_density = 0
+
+        # while sth_changed or seq_len > min_len:
+        while sth_changed:
+
+            if len(self.solution) <= 1:
+                print("Za krótkie rozwiązanie")
+                break
+
             sth_changed = False
             current_density = self.calc_density(self.solution, seq_len)
+            print(current_density)
 
             best_density = 0
             best_density_index = -1
@@ -90,7 +150,7 @@ class Taboo:
                     best_density_index = i
 
             # eliminate it
-            if best_density > current_density or seq_len > min_len:
+            if best_density > current_density or seq_len > min_len: #or current_density < min_density
                 seq_len = self.calc_seq_len(best_density_index, self.solution, seq_len)
                 self.taboo[0].append(self.solution[best_density_index])
                 self.taboo[1].append(self.TABOO_TIME)
@@ -98,6 +158,10 @@ class Taboo:
                 self.solution.pop(best_density_index)
 
                 sth_changed = True
+
+            # TODO: usunąć
+            if seq_len != len(self.collage_sequence_from_solution(self.solution)):
+                print("znowu źle liczy długość...")
         print(f"seq_len: {seq_len}, {len(self.collage_sequence_from_solution(self.solution))}")
         return seq_len
 
@@ -128,11 +192,11 @@ class Taboo:
         """Add oligos to the_one to extend its lenght"""
         print("extend")
         seq_len = len(self.collage_sequence_from_solution(self.solution))
+        last_change = None
 
         # stop when the sequence has desired length or no more oligos left
         while (not seq_len >= self.SEQ_LENGTH) and offsets.shape[0] != 1:
             sth_changed = False
-            # TODO: remember about last added oligo and delete it when seq_len exceeds SEQ_LENGTH
             row_without_main_diagonal = offsets.loc[the_one].drop(the_one, inplace=False)
             lowest_in_row = row_without_main_diagonal.idxmin()
 
@@ -141,21 +205,36 @@ class Taboo:
 
             if offsets[the_one][lowest_in_col] < offsets[lowest_in_row][the_one]:
                 # doklej offsets[the_one][lowest_in_col] na początek
+
+                last_change = f'b{offsets[the_one][lowest_in_col]}'
+                # print("na poczatek", offsets[the_one][lowest_in_col])
+
                 self.solution.insert(0, lowest_in_col)
-                print("na poczatek", offsets[the_one][lowest_in_col], offsets[lowest_in_col][the_one])
                 seq_len += offsets[the_one][lowest_in_col]
                 self.change_offsets(lowest_in_col, the_one, offsets)
+
             else:
                 # doklej offsets[lowest_in_row][the_one] na koniec
+
+                last_change = f'e{offsets[lowest_in_row][the_one]}'
+                # print("na koniec", offsets[lowest_in_row][the_one])
                 self.solution.append(lowest_in_row)
-                print("na koniec", offsets[lowest_in_row][the_one], offsets[the_one][lowest_in_row])
                 seq_len += offsets[lowest_in_row][the_one]
 
                 self.change_offsets(the_one, lowest_in_row, offsets)
                 the_one = lowest_in_row
 
+        if seq_len > self.SEQ_LENGTH:
+            if last_change[0] == 'b':
+                self.solution.pop(0)
+            if last_change[0] == 'e':
+                self.solution.pop()
+            seq_len -= int(last_change[1:])
 
-            print(seq_len, len(self.collage_sequence_from_solution(self.solution)))  #TODO: źle liczy
+        # TODO: usunąć
+        if seq_len != len(self.collage_sequence_from_solution(self.solution)):
+            print("znowu źle liczy długość...")
+
         return seq_len
 
     def collage_base_oligos(self, left: str, right: str):
@@ -177,7 +256,7 @@ class Taboo:
             new_fragment = self.collage_base_oligos(solution[i], solution[i + 1])
             collaged_sequence = collaged_sequence[:-self.OLIGO_LENGTH] + new_fragment
 
-        print(self.solution, collaged_sequence)
+        # print(self.solution, collaged_sequence)
         return collaged_sequence
 
     def calc_density(self, solution: list, seq_len: int) -> float:
