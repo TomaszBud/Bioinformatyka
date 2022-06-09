@@ -1,56 +1,83 @@
 import pandas as pd
-import numpy as np
 import logging
+import numpy as np
 # x = pd.DataFrame(np.array(range(9)).reshape((3,3)), index=['a', 'b', 'c'], columns=['a', 'b', 'c'])
 
 
 class Taboo:
     def __init__(self, base_offsets, base_names, solution, seq_len):
-        self.BASE = pd.DataFrame(base_offsets, index=base_names, columns=base_names, dtype=int)
-        self.solution = [base_names[i] for i in solution]  # nazwy oligo, niepołączone
-        self.OLIGO_LENGTH = len(base_names[0])
-        self.SEQ_LENGTH = seq_len
-        self.taboo = []
+        self.BASE = pd.DataFrame(base_offsets, index=base_names, columns=base_names, dtype=int)  # offset matrix with cols and rows names = nucleotides names
+        self.solution = [base_names[i] for i in solution]  # not joined oligo names included in solution
+        self.OLIGO_LENGTH = len(base_names[0])  # length of basic oligo
+        self.SEQ_LENGTH = seq_len   # desired seq lenght
+        self.TABOO_TIME = 3     # how long can oligo be in taboo list
+        self.taboo = [[], []]   # oligos' names and time left for them in taboo list
 
-        logging.basicConfig(format='%(message)s', level=logging.INFO)
-
-        print(self.BASE)
+        logging.basicConfig(format='%(message)s', level=logging.DEBUG)
 
     def run(self):
-        # TODO: heurystyka
+        """
+        taboo heuristics
+        :return:
+        """
+        seq_len = 0
 
-        seq_len = self.shrink()
-        # prepare offsets matrix
-        offsets = self.BASE.copy()
+        while seq_len != self.SEQ_LENGTH or self.calc_density(self.solution, seq_len) < 0.70:  #TODO: co jak będzie dużo negatywnych?
+            print("run")
+            self.update_taboo()
+            # print(self.taboo[1])
 
-        # delete banned oligos
-        for t in self.solution[1:-1] + self.taboo:
-            offsets.drop(t, axis=0, inplace=True)
-            offsets.drop(t, axis=1, inplace=True)
+            seq_len = self.shrink()
+            # print(self.taboo[1])
+
+            # prepare offsets matrix
+            offsets = self.BASE.copy()
+
+            # delete banned oligos
+            for t in self.solution[1:-1] + list(self.taboo[0]):
+                offsets.drop(t, axis=0, inplace=True)
+                offsets.drop(t, axis=1, inplace=True)
 
 
-        # offsets for the longest oligo
-        longest = self.solution[0]
+            # offsets for the longest oligo
+            longest = self.solution[0]
 
-        offsets.loc[longest] = offsets.loc[self.solution[-1]]
-        offsets.drop(self.solution[-1], axis=1, inplace=True)
-        offsets.drop(self.solution[-1], axis=0, inplace=True)
+            offsets.loc[longest] = offsets.loc[self.solution[-1]]
+            offsets[longest][longest] = 0
+            offsets.drop(self.solution[-1], axis=1, inplace=True)
+            offsets.drop(self.solution[-1], axis=0, inplace=True)
 
-        seq_len = self.extend(longest, offsets)
-        print("result:", self.calc_density(self.solution, seq_len), "\nUsed oligos len: ", len(self.solution))
+            seq_len = self.extend(longest, offsets)
+            print("result:", self.calc_density(self.solution, seq_len), "\nUsed oligos len: ", len(self.solution))
 
         return self.solution
 
+
+    def update_taboo(self):
+        """
+        Decrease time left in taboo list for each oligo
+        """
+        i = 0
+        while i < len(self.taboo[1]):
+            self.taboo[1][i] -= 1
+            if self.taboo[1][i] == 0:
+                self.taboo[0].pop(i)
+                self.taboo[1].pop(i)
+            i += 1
+
+
     def shrink(self):
         """ delete oligos, which make density worse"""
+        #TODO: shrink powinien bardziej skracać. Skrócił do 207, później extend do 214 i tak w kółko.
+        min_len = self.SEQ_LENGTH-self.OLIGO_LENGTH # teraz pogarsza najlepsze rozwiązanie
 
         print("shrink")
         sth_changed = True
         seq_len = len(self.collage_sequence_from_solution(self.solution))
-        while sth_changed or seq_len > self.SEQ_LENGTH:
+        while sth_changed or seq_len > min_len:
             sth_changed = False
             current_density = self.calc_density(self.solution, seq_len)
-            print(f"dens: {current_density}")
+
             best_density = 0
             best_density_index = -1
 
@@ -63,26 +90,36 @@ class Taboo:
                     best_density_index = i
 
             # eliminate it
-            if best_density > current_density or seq_len > self.SEQ_LENGTH:
+            if best_density > current_density or seq_len > min_len:
                 seq_len = self.calc_seq_len(best_density_index, self.solution, seq_len)
-                self.taboo.append(self.solution[best_density_index])
+                self.taboo[0].append(self.solution[best_density_index])
+                self.taboo[1].append(self.TABOO_TIME)
+
                 self.solution.pop(best_density_index)
-                print(seq_len, len(self.collage_sequence_from_solution(self.solution)))
 
                 sth_changed = True
+        print(f"seq_len: {seq_len}, {len(self.collage_sequence_from_solution(self.solution))}")
         return seq_len
 
-    def calc_seq_len(self, best_density_index, solution, seq_len):
-        taboo_oligo = solution[best_density_index]
-        if best_density_index == 0:
-            next_oligo = self.solution[best_density_index + 1]
+    def calc_seq_len(self, oligo_to_del_index, solution, seq_len):
+        """
+        Calc how solution length changes when oligo is deleted
+        :param oligo_to_del_index:
+        :param solution:
+        :param seq_len:
+        :return:
+        """
+        taboo_oligo = solution[oligo_to_del_index]
+
+        if oligo_to_del_index == 0:
+            next_oligo = self.solution[oligo_to_del_index + 1]
             return seq_len - self.BASE[next_oligo][taboo_oligo]
-        elif best_density_index == len(solution) - 1:
-            prev_oligo = self.solution[best_density_index - 1]
+        elif oligo_to_del_index == len(solution) - 1:
+            prev_oligo = self.solution[oligo_to_del_index - 1]
             return seq_len - self.BASE[taboo_oligo][prev_oligo]
         else:
-            prev_oligo = self.solution[best_density_index - 1]
-            next_oligo = self.solution[best_density_index + 1]
+            prev_oligo = self.solution[oligo_to_del_index - 1]
+            next_oligo = self.solution[oligo_to_del_index + 1]
             seq_len -= self.BASE[taboo_oligo][prev_oligo] - (self.OLIGO_LENGTH - self.BASE[next_oligo][taboo_oligo])
             seq_len -= self.OLIGO_LENGTH - self.BASE[next_oligo][prev_oligo]
             return seq_len
@@ -90,33 +127,35 @@ class Taboo:
     def extend(self, the_one: str, offsets: pd.DataFrame):
         """Add oligos to the_one to extend its lenght"""
         print("extend")
-        lowest = 1
         seq_len = len(self.collage_sequence_from_solution(self.solution))
 
         # stop when the sequence has desired length or no more oligos left
         while (not seq_len >= self.SEQ_LENGTH) and offsets.shape[0] != 1:
             sth_changed = False
             # TODO: remember about last added oligo and delete it when seq_len exceeds SEQ_LENGTH
-            row_without_main_diagonal = offsets.loc[the_one].drop(the_one)
+            row_without_main_diagonal = offsets.loc[the_one].drop(the_one, inplace=False)
             lowest_in_row = row_without_main_diagonal.idxmin()
 
-            col_without_main_diagonal = offsets[the_one].drop(the_one)
+            col_without_main_diagonal = offsets[the_one].drop(the_one, inplace=False)
             lowest_in_col = col_without_main_diagonal.idxmin()
 
-            if offsets[the_one][lowest_in_col] > offsets[lowest_in_row][the_one]:
-                # doklej na koniec
-                self.solution.append(lowest_in_row)
-                seq_len += offsets[lowest_in_row][the_one]
-                self.change_offsets(the_one, lowest_in_row, offsets)
-                the_one = lowest_in_row
-                print("na koniec")
-            else:
-                # doklej na początek
+            if offsets[the_one][lowest_in_col] < offsets[lowest_in_row][the_one]:
+                # doklej offsets[the_one][lowest_in_col] na początek
                 self.solution.insert(0, lowest_in_col)
+                print("na poczatek", offsets[the_one][lowest_in_col], offsets[lowest_in_col][the_one])
                 seq_len += offsets[the_one][lowest_in_col]
                 self.change_offsets(lowest_in_col, the_one, offsets)
-                print("na poczatek")
-            print(seq_len)
+            else:
+                # doklej offsets[lowest_in_row][the_one] na koniec
+                self.solution.append(lowest_in_row)
+                print("na koniec", offsets[lowest_in_row][the_one], offsets[the_one][lowest_in_row])
+                seq_len += offsets[lowest_in_row][the_one]
+
+                self.change_offsets(the_one, lowest_in_row, offsets)
+                the_one = lowest_in_row
+
+
+            print(seq_len, len(self.collage_sequence_from_solution(self.solution)))  #TODO: źle liczy
         return seq_len
 
     def collage_base_oligos(self, left: str, right: str):
@@ -138,16 +177,13 @@ class Taboo:
             new_fragment = self.collage_base_oligos(solution[i], solution[i + 1])
             collaged_sequence = collaged_sequence[:-self.OLIGO_LENGTH] + new_fragment
 
+        print(self.solution, collaged_sequence)
         return collaged_sequence
 
     def calc_density(self, solution: list, seq_len: int) -> float:
         """ how many oligos used for the sequence with this length """
-        # collage sequence by indexes
-
         used_oligos = len(solution)
         collaged_sequence = seq_len
-
-        # print(collaged_sequence + '\n' + " " * (len(collaged_sequence) - self.OLIGO_LENGTH) + new_fragment)
 
         return used_oligos / collaged_sequence
 
@@ -155,17 +191,9 @@ class Taboo:
     def change_offsets(left: str, right: str, offsets: pd.DataFrame):
         # self.offsets for the new oligo
         """change offsets and delete used oligos"""
-        offsets.loc[right] = offsets.loc[left]
+        offsets[right] = offsets[left]
         offsets[right][right] = 0
-
         offsets.drop(left, axis=1, inplace=True)
         offsets.drop(left, axis=0, inplace=True)
-
-        # offsets[:, right] = offsets[:, left]
-        # offsets[right][right] = 0
-        #
-        # offsets = np.delete(offsets, left, 0)
-        # offsets = np.delete(offsets, left, 1)
-        # base_indexes_header.pop(left)
 
         return offsets
