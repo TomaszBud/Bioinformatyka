@@ -23,7 +23,7 @@ if __name__ == "__main__":
                     print("Zapisano!")
                 sign = '+' if file_name.find("+") > 0 else '-'
                 density_max = max(density)
-                density_avg = np.avg(density)
+                density_avg = np.mean(density)
                 density_std = np.std(density)
                 out_file.write(f"{file_name};{tab_dens};{max(seq_len)};{density_max};{density_avg};{density_std};{max(difference_in_density)};{max(used_oligos)};{sign};{min(collager_time)};{minse_time}\n")
 
