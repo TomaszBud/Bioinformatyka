@@ -1,5 +1,5 @@
 from collager import Collager
-from Taboo import Taboo
+from ShrinkoExtenderoinator import ShrinkoExtenderoinator
 import time
 import numpy as np
 import logging
@@ -14,6 +14,7 @@ def run_algorithm(file_name, show=False):
     start = time.time()
     collager.run_collager()
     end = time.time()
+
     res = collager.names[np.argmax([len(a) for a in collager.names])]
     indexes_in_solution = collager.names_components[res]
     seq_len = max([len(a) for a in collager.names])
@@ -35,30 +36,30 @@ def run_algorithm(file_name, show=False):
     if seq_len == collager.SEQ_LENGTH:
         best_solution = ([collager.BASE_NAMES[i] for i in indexes_in_solution], density)
         if len(collager.names) != 1:  # dla negatywnych
-            return seq_len, density, desired_density - density, len(indexes_in_solution), collager_time, 0
+            return seq_len, density, desired_density - density, len(indexes_in_solution), collager_time, 0, "brak"
 
-    taboo = Taboo(collager.BASE_OFFSETS, collager.BASE_NAMES, indexes_in_solution, collager.SEQ_LENGTH, best_solution)
+    se = ShrinkoExtenderoinator(collager.BASE_OFFSETS, collager.BASE_NAMES, indexes_in_solution, collager.SEQ_LENGTH, best_solution)
 
     start = time.time()
-    solution = taboo.run()
+    solution = se.run()
     end = time.time()
 
-    taboo_seq = taboo.collage_sequence_from_solution(solution)
-    density = taboo.calc_density(solution, len(taboo_seq))
+    taboo_seq = se.collage_sequence_from_solution(solution)
+    density = se.calc_density(solution, len(taboo_seq))
 
     taboo_time = end - start
 
     if show:
         print(f"\n---\nStan po taboo:",
               f"długość sekwencji:{len(taboo_seq)}",
-              f"zagęszczenie: {taboo.calc_density(solution, len(taboo_seq))}\n",
+              f"zagęszczenie: {se.calc_density(solution, len(taboo_seq))}\n",
               f"Poszukiwana sekwencja: {taboo_seq}",
               f"Użyto {len(solution)} oligonukleotydów\n---\n", sep="\n")
 
         logging.info(
             f"odległość od pożądanego wyniku: {(collager.SEQ_LENGTH - collager.OLIGO_LENGTH + 1) - len(solution)}")
 
-    return len(taboo_seq), density, desired_density - density, len(solution), collager_time, taboo_time
+    return len(taboo_seq), density, desired_density - density, len(solution), collager_time, taboo_time, se.best_density
 
 if __name__ == '__main__':
     run_algorithm('9.200+20', show=True)
