@@ -41,7 +41,7 @@ class Taboo:
             # print("run")
             prev_density = density
             self.update_taboo()
-            # print(self.taboo[1])
+            # print(self.taboo)
 
             seq_len = self.shrink()
             # print(self.taboo[1])
@@ -60,6 +60,7 @@ class Taboo:
             for t in self.solution[1:-1]: #+ list(self.taboo[0]):
                 offsets.drop(t, axis=0, inplace=True)
                 offsets.drop(t, axis=1, inplace=True)
+            print(f"in main: {len(self.solution)}")
 
             # offsets for the longest oligo
             longest = self.solution[0]
@@ -117,33 +118,32 @@ class Taboo:
     def shrink(self):
         #TODO: dlaczego się zapętla
         """ delete oligos, which make density worse"""
-        # print("shrink")
+        print("---\nshrink")
 
         # TODO: jak mocno skracać?
-        min_len = self.SEQ_LENGTH - self.OLIGO_LENGTH*4  # teraz pogarsza najlepsze rozwiązanie
+        min_len = self.SEQ_LENGTH - self.OLIGO_LENGTH*2  # teraz pogarsza najlepsze rozwiązanie
         min_density = 0.70  # TODO: dobrać parametr
 
         sth_changed = True
         seq_len = len(self.collage_sequence_from_solution(self.solution))
         current_density = 0
 
-        # while sth_changed or seq_len > min_len:
         while sth_changed:
 
-            if len(self.solution) <= 1:
+            if len(self.solution) <= 1 or len(self.solution) == len(self.taboo[0]):
                 print("Za krótkie rozwiązanie")
                 break
 
             sth_changed = False
             current_density = self.calc_density(self.solution, seq_len)
-            # print(current_density)
+            print(current_density)
 
             best_density = 0
             best_density_index = -1
 
             # find the one to eliminate
             for i in range(len(self.solution)):
-                if self.solution[i] not in self.taboo:
+                if self.solution[i] not in self.taboo[0]:
                     temp_seq_len = self.calc_seq_len(i, self.solution, seq_len)
                     density = self.calc_density(self.solution[:i] + self.solution[i + 1:], temp_seq_len)
                     if density >= best_density:
@@ -151,8 +151,10 @@ class Taboo:
                         best_density_index = i
 
             # eliminate it
-            if best_density > current_density or seq_len > min_len: #or current_density < min_density
+            if best_density > current_density or seq_len > min_len:  # or current_density < min_density
                 seq_len = self.calc_seq_len(best_density_index, self.solution, seq_len)
+
+                # print(f"eliminate {best_density_index} {self.solution[best_density_index]} {len(self.solution)}")
                 # self.taboo[0].append(self.solution[best_density_index])
                 # self.taboo[1].append(self.TABOO_TIME)
 
@@ -164,6 +166,7 @@ class Taboo:
             if seq_len != len(self.collage_sequence_from_solution(self.solution)):
                 print("znowu źle liczy długość...")
         # print(f"seq_len: {seq_len}, {len(self.collage_sequence_from_solution(self.solution))}")
+        # print(self.solution)
         return seq_len
 
     def calc_seq_len(self, oligo_to_del_index, solution, seq_len):
@@ -191,7 +194,7 @@ class Taboo:
 
     def extend(self, the_one: str, offsets: pd.DataFrame):
         """Add oligos to the_one to extend its lenght"""
-        # print("extend")
+        print("extend")
         seq_len = len(self.collage_sequence_from_solution(self.solution))
         last_change = None
 
@@ -217,6 +220,9 @@ class Taboo:
                 self.taboo[0].append(self.solution[0])
                 self.taboo[1].append(self.TABOO_TIME)
 
+                # print(f"dodaje {self.solution[0]}")
+
+
             else:
                 # doklej offsets[lowest_in_row][the_one] na koniec
 
@@ -230,6 +236,9 @@ class Taboo:
 
                 self.taboo[0].append(self.solution[-1])
                 self.taboo[1].append(self.TABOO_TIME)
+
+                # print(f"dodaje {self.solution[-1]}")
+
 
         if seq_len > self.SEQ_LENGTH:
             if last_change[0] == 'b':
